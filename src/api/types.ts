@@ -54,6 +54,8 @@ export interface BankView {
   lending_apr: number;
   borrowing_apr: number;
   weights: BankWeights;
+  /** 程序算健康度时用的价格区间(开仓用 EMA、维持用实时价;资产取 low、债务取 high)。mock 价时 low = high。无价格时为 null。 */
+  risk_price: { init: { low: number; high: number }; maint: { low: number; high: number } } | null;
   curve: InterestCurve;
   /** I80F48 精确十进制字符串。 */
   asset_share_value: string;

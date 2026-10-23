@@ -49,18 +49,25 @@ function apply(positions: Map<string, Position>, action: RiskAction, bank: BankV
   positions.set(bank.address, p);
 }
 
+/**
+ * 程序算健康度用的价格区间(mrgn-0.1.0;API 的 riskPrice 同一算法):开仓用 EMA、维持用实时价;
+ * 资产取下沿、债务取上沿。没有区间(mock 价，std_dev 为 0)时退化为单一价格。
+ * 曾只用中间价：持有约 $3k Pyth 资产的账户，预览以为还能借 $2.3,程序只认 $0.34,模拟失败。
+ */
+const band = (b: BankView, mode: 'init' | 'maint') => b.risk_price?.[mode] ?? { low: b.price!, high: b.price! };
+
 function metrics(positions: Map<string, Position>, banks: Map<string, BankView>): RiskMetrics {
   const sums = { weightedAssetsInitUsd: 0, weightedLiabilitiesInitUsd: 0, weightedAssetsMaintUsd: 0, weightedLiabilitiesMaintUsd: 0 };
   for (const [address, p] of positions) {
     if (!p.deposit && !p.borrow) continue;
     const b = banks.get(address);
     if (!b || b.price == null || !Number.isFinite(b.price)) return { ...sums, weightedAssetsInitUsd: null, weightedLiabilitiesInitUsd: null, weightedAssetsMaintUsd: null, weightedLiabilitiesMaintUsd: null, healthFactor: null, borrowCapacityUsed: null };
-    const depositedUsd = Number(p.deposit) / 10 ** b.decimals * b.price;
-    const borrowedUsd = Number(p.borrow) / 10 ** b.decimals * b.price;
-    sums.weightedAssetsInitUsd += depositedUsd * b.weights.asset_init;
-    sums.weightedLiabilitiesInitUsd += borrowedUsd * b.weights.liability_init;
-    sums.weightedAssetsMaintUsd += depositedUsd * b.weights.asset_maint;
-    sums.weightedLiabilitiesMaintUsd += borrowedUsd * b.weights.liability_maint;
+    const deposited = Number(p.deposit) / 10 ** b.decimals, borrowed = Number(p.borrow) / 10 ** b.decimals;
+    const init = band(b, 'init'), maint = band(b, 'maint');
+    sums.weightedAssetsInitUsd += deposited * init.low * b.weights.asset_init;
+    sums.weightedLiabilitiesInitUsd += borrowed * init.high * b.weights.liability_init;
+    sums.weightedAssetsMaintUsd += deposited * maint.low * b.weights.asset_maint;
+    sums.weightedLiabilitiesMaintUsd += borrowed * maint.high * b.weights.liability_maint;
   }
   return { ...sums,
     healthFactor: sums.weightedLiabilitiesMaintUsd ? sums.weightedAssetsMaintUsd / sums.weightedLiabilitiesMaintUsd : null,
@@ -78,13 +85,13 @@ function maxBorrow(positions: Map<string, Position>, banks: Map<string, BankView
     if (address === target.address || (!p.deposit && !p.borrow)) continue;
     const b = banks.get(address);
     if (!b || b.price == null || !Number.isFinite(b.price)) return null;
-    assets += Number(p.deposit) / 10 ** b.decimals * b.price * b.weights.asset_init;
-    liabilities += Number(p.borrow) / 10 ** b.decimals * b.price * b.weights.liability_init;
+    assets += Number(p.deposit) / 10 ** b.decimals * band(b, 'init').low * b.weights.asset_init;
+    liabilities += Number(p.borrow) / 10 ** b.decimals * band(b, 'init').high * b.weights.liability_init;
   }
   const current = positions.get(target.address) ?? zero();
   const releasableDeposit = Number(current.deposit) / 10 ** target.decimals;
   const currentBorrow = Number(current.borrow) / 10 ** target.decimals;
-  const extra = Math.max(0, releasableDeposit + (assets - liabilities) / (target.price * target.weights.liability_init) - currentBorrow);
+  const extra = Math.max(0, releasableDeposit + (assets - liabilities) / (band(target, 'init').high * target.weights.liability_init) - currentBorrow);
   return BigInt(Math.floor(extra * 10 ** target.decimals)).toString();
 }
 

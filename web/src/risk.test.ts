@@ -8,7 +8,7 @@ import { previewRisk } from './risk.js';
 const bank = (address: string, label: string, price: number, weights: BankView['weights']): BankView => ({
   address, label, price, decimals: 0, mint: address, price_updated_at: null, oracle_feed: null, oracle_source: 'mock',
   total_deposits: '0', total_borrows: '0', total_deposits_usd: 0, total_borrows_usd: 0, utilization: 0,
-  lending_apr: 0, borrowing_apr: 0, weights,
+  lending_apr: 0, borrowing_apr: 0, weights, risk_price: null,
   curve: { optimal_utilization: 0.5, plateau_rate: 0.6, max_rate: 3, fee_rate: 0.06, fee_fixed_apr: 0.04 },
   asset_share_value: '1', liability_share_value: '1', last_accrual_at: '',
 });
@@ -96,4 +96,23 @@ test('mock liquidation Bob agrees with the maintained USD health gap', async () 
     if (oldLocation) Object.defineProperty(globalThis, 'location', oldLocation);
     else Reflect.deleteProperty(globalThis, 'location');
   }
+});
+
+// 2026-10-23 作者账户 J6ND…:按中间价还剩约 $2.3 开仓额度，程序按保守价(开仓 EMA、资产取下沿、债务取上沿)只剩 $0.34。
+// 前端显示"最多可借 2.1189",链上模拟失败。预览必须用与程序相同的价格区间。
+test('有价格区间时按程序的保守价计算：资产取下沿、债务取上沿，开仓与维持各用各的区间', () => {
+  const pyth = { ...collateral, address: 'pyth', price: 100,
+    risk_price: { init: { low: 98, high: 102 }, maint: { low: 99, high: 101 } } };
+  const usd = { ...debt, risk_price: { init: { low: 1, high: 1 }, maint: { low: 1, high: 1 } } };
+  // 存 10 pyth、借 780 tUSDC:中间价开仓额度 10×100×0.8 − 780×1.1 = 800 − 858 < 0 不行;改小:借 720
+  const balances = [balance(pyth, '10', '0'), balance(usd, '0', '720')];
+  const result = previewRisk([pyth, usd], balances, { action: 'borrow', bank: usd.address, amount: '0' });
+  // 开仓：资产 10×98×0.8 = 784,债务 720×1×1.1 = 792 → 已超额，最多可借 0
+  assert.equal(result.before.weightedAssetsInitUsd, 784);
+  assert.ok(Math.abs(result.before.weightedLiabilitiesInitUsd! - 792) < 1e-9);
+  assert.equal(result.maxBorrow, '0');
+  // 按中间价(800 − 792 = 8)本会以为还能借 7;现在借 7 必须被拦下
+  assert.equal(previewRisk([pyth, usd], balances, { action: 'borrow', bank: usd.address, amount: '7' }).blocked, '超过可借额度');
+  // 维持口径(健康因子):资产 10×99×0.9 = 891,债务 720×1×1.05 = 756
+  assert.ok(Math.abs(result.before.healthFactor! - 891 / 756) < 1e-12);
 });

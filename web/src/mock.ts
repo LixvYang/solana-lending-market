@@ -26,7 +26,7 @@ export function installMock() {
     return { address, mint, label, decimals, price, price_updated_at: new Date().toISOString(), oracle_feed: null, oracle_source: 'mock', total_deposits: dep, total_borrows: bor,
       total_deposits_usd: depUsd, total_borrows_usd: borUsd, utilization: u, lending_apr: rates(u).lending_apr, borrowing_apr: rates(u).borrowing_apr,
       weights: label !== 'tUSDC' ? { asset_init: 0.8, asset_maint: 0.9, liability_init: 1.1, liability_maint: 1.05 } : { asset_init: 1, asset_maint: 1, liability_init: 1.1, liability_maint: 1.05 },
-      curve, asset_share_value: '1.000000155398776513', liability_share_value: '1.000000445109712643', last_accrual_at: new Date().toISOString() };
+      curve, risk_price: null, asset_share_value: '1.000000155398776513', liability_share_value: '1.000000445109712643', last_accrual_at: new Date().toISOString() };
   };
   const banks = [
     bank(a.banks.tUSDC, 'tUSDC', a.mints.tUSDC, 6, 1, liquidation ? '16000000000' : '14512501895', liquidation ? '5000001696' : '0', liquidation ? 16000 : 14512.5, liquidation ? 5000 : 0),

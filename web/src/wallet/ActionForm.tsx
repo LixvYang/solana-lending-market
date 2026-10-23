@@ -43,7 +43,10 @@ export function ActionForm({ banks, bank, mine, wallet, initialAction, onTransac
   const cap = action === 'deposit' ? held : action === 'withdraw' ? position?.deposit ?? '0' : action === 'repay' ? position?.borrow ?? '0' : risk?.maxBorrow == null ? null : minNative(risk.maxBorrow, liquidity);
   const def = ACTIONS.find((a) => a.id === action)!;
   const canBuild = Boolean(address && (all || (native && native !== '0')));
-  const health = (value: number | null, assets: number | null) => value == null ? !assets ? '—' : '∞ 无债务' : value.toFixed(2);
+  // 前后两个值保留两位小数看不出变化(如债务 2271、再借 2.1:1.1797 → 1.1786)时用三位，否则会显示"1.18 → 1.18"像没算。
+  const digits = risk && risk.before.healthFactor != null && risk.after.healthFactor != null && risk.before.healthFactor !== risk.after.healthFactor
+    && risk.before.healthFactor.toFixed(2) === risk.after.healthFactor.toFixed(2) ? 3 : 2;
+  const health = (value: number | null, assets: number | null) => value == null ? !assets ? '—' : '∞ 无债务' : value.toFixed(digits);
   const healthClass = (value: number | null) => value == null ? '' : value < 1.1 ? 'bad-text' : value < 1.5 ? 'risk-warn' : 'good-text';
   const capacity = risk?.after.borrowCapacityUsed;
   const capClass = capacity == null ? '' : capacity >= 1 ? 'crit' : capacity >= 0.75 ? 'warn' : '';

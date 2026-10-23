@@ -553,3 +553,52 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **弱化坐标轴**:按 dataviz 规范，去掉纵轴轴线与刻度线，只留水平网格。
 - **配色**:dataviz 校验脚本实测——浅色 orange-9 对比度 2.83(警告)、深色 orange-9 亮度出带(失败);改用浅色 orange-10、深色 orange-8,两种模式全部通过。
 - **浏览器验收**:浅色 1280、深色 390。两张图渲染;历史曲线悬停显示时间与数值、提示框贴近悬停点且在视口内;利率曲线悬停显示利用率与存借 APR,"最优"参考线可见;390 宽无横向溢出。
+
+### T19 界面中英双语(i18n)— todo
+
+作者要求界面支持中文和英文，英文术语参考主流借贷产品(Aave、Morpho、marginfi)。本任务覆盖本节与公共规则冲突处:"界面文字用中文"改为"界面文字全部经 i18n 字典"。
+
+**方案(Claude 已定):**
+1. **不加依赖**,自写类型安全字典(约 250 条，用 react-i18next 不划算)。`web/src/i18n/zh.ts` 为基准;`en.ts` 类型声明为 `typeof zh` 的同键结构，缺键或多键编译失败。带参数的条目写成函数(`borrowMax: (n: string) => \`最多可借 ${n}\``),不做字符串模板解析。
+2. `web/src/i18n/index.tsx`:`LocaleProvider` + `useT()` 返回当前字典与 `locale`。初始语言：本地存储 `lang`(try/catch 包裹)→ 浏览器 `navigator.languages` 以 `zh` 开头则中文 → 否则英文。切换时写回本地存储并设置 `document.documentElement.lang`(`zh-CN` / `en`)。
+3. 切换入口：页头右侧一个按钮，显示另一种语言("EN" / "中文"),点一下切换。不做下拉。
+4. 格式化:`fmtTime` 按当前语言(`zh-CN` / `en-US`,24 小时制);图表刻度和提示框里的时间维持数字格式(`MM/DD HH:mm`、`YYYY/MM/DD HH:mm`),两种语言通用。金额、数量、百分比格式不变。
+5. **API 文案与语言解耦**(改后端):
+   - `ApiError` 增加稳定的机器码 `code`(如 `PRICE_UNAVAILABLE`、`DESK_INSUFFICIENT`、`FAUCET_EMPTY`、`TRANSFER_TIMEOUT`、`TRANSFER_FAILED`、`NO_PRICE_SOURCE`…),响应体为 `{ error, code, params? }`(`params` 如 `{ symbol }`);`error` 保留中文作为兜底。前端按 `code` 查字典，查不到显示 `error`。
+   - 程序错误已有 `name`(`RiskEngineInitRejected` 等),前端按 `name` 翻译，`message` 作兜底。
+   - `wallet-history` 的 `result: '成功'|'失败'` 改为语言无关的值(`'success' | 'failed' | 其他状态原值`),前端翻译;同步 `src/api/types.ts`、`web/src/mock.ts` 与测试。
+   - 兑换报价的 `summary` 中文句子：前端改用已有字段自行拼出，不再显示 `summary`(字段可保留)。
+6. 范围：仅 `web/src` 界面文字(含 `aria-label`、`title`、占位符、空状态、提示、图例、表头、toast)。`<title>` 两种语言都用 "Lending Market / 借贷市场" 不需要切换——改为随语言切换。教程与 `docs/` 不翻译。代码注释保持中文。
+7. 中文文案逐字保持现状(不借机改词)。
+
+**英文术语表(必须遵守):**
+
+| 中文 | English | 中文 | English |
+|---|---|---|---|
+| 市场 | Markets | 我的仓位 | Dashboard |
+| 兑换 | Swap | 链上数据 | Explorer |
+| 存款(动作) | Supply | 已存款 / 我的存款 | Supplied / Your supplies |
+| 借款(动作) | Borrow | 已借款 / 我的借款 | Borrowed / Your borrows |
+| 还款 | Repay | 取款 | Withdraw |
+| 债务 | Debt | 抵押 | Collateral |
+| 健康度 | Health factor | 可清算 | Liquidatable |
+| 总存款 / 总借款 | Total supplied / Total borrowed | 可用流动性 | Available liquidity |
+| 存款 APR / 借款 APR | Supply APR / Borrow APR | 利用率 | Utilization |
+| 最大 LTV / 抵押率 | Max LTV | 清算线 | Liquidation threshold |
+| 借款权重 | Borrow weight | 净值 | Net worth |
+| 最多可借 | Available to borrow | 借款额度已用 | Borrow power used |
+| 利率模型 | Interest rate model | 最优 | Optimal |
+| 历史曲线 | History | 查看数据表 | Show data table |
+| 流水 | Activity | 清算记录 | Liquidations |
+| 连接钱包 | Connect wallet | 领取测试代币 | Get test tokens |
+| 交易详情 | Transaction details | 同步中 | Syncing |
+| 预言机 | Oracle | 银行(marginfi bank) | Bank |
+
+表里没有的词按 Aave 英文界面的写法;句子用简洁的产品语气(句首大写，按钮不加句号)。
+
+**测试:**
+- 字典键一致性:`en` 与 `zh` 键集合相同，所有值非空(函数条目用样例参数调用后非空)。
+- **防遗漏扫描测试**:扫描 `web/src/**/*.{ts,tsx}`(排除 `i18n/`、`*.test.*`、`mock.ts`),去掉注释后不得含中日韩字符字面量。这是长期守卫，后续新增文案也会被它拦下。
+- 后端：错误响应含 `code`;`wallet-history` 结果值改动的现有测试同步更新。
+
+**验收**:两处 typecheck、全量测试。浏览器中英切换、390px 英文长词不溢出由 Claude 验收。

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CartesianGrid, Line, LineChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { BankHistoryPoint, BankHistoryView } from '@contract';
 import { fmtPct, fmtTime, fmtToken, fmtUsd } from '../format';
+import { resampleSteps } from './resample';
 
 type Mode = 'utilization' | 'apr' | 'total';
 type ChartPoint = BankHistoryPoint & { time: number };
@@ -18,7 +19,7 @@ const chartTime = (time: number) => {
   const date = new Date(time);
   return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
-const fullTime = (time: string) => {
+const fullTime = (time: number) => {
   const date = new Date(time);
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
@@ -30,13 +31,13 @@ function niceTop(value: number, cap: number) {
   return Math.min([1, 2, 5, 10].map((multiple) => multiple * step).find((tick) => tick >= value)!, cap);
 }
 
-function HistoryTooltip({ active, payload, decimals, symbol, mode }: { active?: boolean; payload?: { payload?: ChartPoint }[]; decimals: number; symbol: string; mode: Mode }) {
+function HistoryTooltip({ active, payload, decimals, symbol, mode, hasTimes }: { active?: boolean; payload?: { payload?: ChartPoint }[]; decimals: number; symbol: string; mode: Mode; hasTimes: boolean }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
   const rows: [string, number | null, string][] = mode === 'utilization' ? [['利用率', point.utilization, fmtPct(point.utilization, 2)]]
     : mode === 'apr' ? [['借款 APR', point.borrowing_apr, fmtPct(point.borrowing_apr, 2)], ['存款 APR', point.lending_apr, fmtPct(point.lending_apr, 2)]]
       : [['总存款', point.total_deposits_usd, `${fmtToken(point.total_deposits, decimals, 4)} ${symbol} / ${fmtUsd(point.total_deposits_usd)}`], ['总借款', point.total_borrows_usd, `${fmtToken(point.total_borrows, decimals, 4)} ${symbol} / ${fmtUsd(point.total_borrows_usd)}`]];
-  return <div className="tip">{point.block_time ? <div className="muted">{fullTime(point.block_time)}</div> : <div className="muted">slot {point.slot}</div>}
+  return <div className="tip">{hasTimes ? <div className="muted">{fullTime(point.time)}</div> : <div className="muted">slot {point.slot}</div>}
     {rows.map(([name, _value, display], index) => <div className="row" key={name}><i className="key" style={{ background: SERIES[mode][index]?.color ?? 'var(--chart-borrow)' }} /><b>{display}</b><span>{name}</span></div>)}
   </div>;
 }
@@ -61,17 +62,19 @@ export function BankHistory({ history, decimals, symbol }: { history: BankHistor
   const formatY = (value: number) => mode === 'total' ? compactUsd(value) : fmtPct(value);
   const hasTimes = points.every((point) => point.block_time != null);
   const formatX = (value: number) => hasTimes ? chartTime(value) : `slot ${value}`;
+  // 只有真实时间轴才补点;slot 回退时没有"现在"对应的 slot。
+  const chartPoints = hasTimes ? resampleSteps(points, Date.now(), 240) : points;
   return <section className="card bank-history"><h2>历史曲线</h2>
     <div className="seg" role="group" aria-label="历史曲线指标">{(Object.keys(LABELS) as Mode[]).map((key) => <button key={key} className={mode === key ? 'on' : ''} aria-pressed={mode === key} onClick={() => setMode(key)}>{LABELS[key]}</button>)}</div>
     {!points.length ? <p className="muted">还没有银行状态历史。</p>
       : points.length === 1 ? <p className="muted">目前只有 1 个状态记录（slot {points[0].slot}{points[0].block_time ? `，${fmtTime(points[0].block_time)}` : ''}），后续状态变化后会形成曲线。</p>
         : mode === 'total' && values.length === 0 ? <p className="muted">这些历史时刻没有可用的价格快照，暂时无法显示美元总量。</p>
           : <div className="history-plot chart"><ResponsiveContainer width="100%" height={230}>
-            <LineChart data={points} margin={{ top: 12, right: 16, bottom: 8, left: 8 }}>
+            <LineChart data={chartPoints} margin={{ top: 12, right: 16, bottom: 8, left: 8 }}>
               <CartesianGrid vertical={false} stroke="var(--slate-6)" />
               <XAxis dataKey="time" type="number" scale="time" domain={['dataMin', 'dataMax']} tickCount={5} tickFormatter={formatX} tick={{ fill: 'var(--slate-11)', fontSize: 12 }} minTickGap={28} />
               <YAxis axisLine={false} tickLine={false} domain={[0, top]} tickFormatter={formatY} tick={{ fill: 'var(--slate-11)', fontSize: 12 }} width={52} />
-              <Tooltip content={<HistoryTooltip decimals={decimals} symbol={symbol} mode={mode} />} cursor={{ stroke: 'var(--slate-8)', strokeDasharray: '3 3' }} />
+              <Tooltip content={<HistoryTooltip decimals={decimals} symbol={symbol} mode={mode} hasTimes={hasTimes} />} cursor={{ stroke: 'var(--slate-8)', strokeDasharray: '3 3' }} />
               {series.length > 1 && <Legend wrapperStyle={{ color: 'var(--slate-11)', fontSize: 12 }} />}
               {series.map((item) => <Line key={item.key} dataKey={item.key} name={item.name} type="stepAfter" stroke={item.color} strokeWidth={2} dot={false} activeDot={{ r: 5, fill: item.color, stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={false} connectNulls={false} />)}
             </LineChart>

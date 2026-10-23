@@ -41,7 +41,7 @@ export function AssetPage({ bank, banks, mine, wallet, curve, history, historyEr
             <tr><td className="muted">清算线</td><td className="n">{fmtPct(bank.weights.asset_maint, 0)}</td></tr>
             <tr><td className="muted">借款权重</td><td className="n">{fmtPct(bank.weights.liability_init, 0)}</td></tr>
           </tbody></table></section>
-          {history ? <BankHistory history={history} /> : <section className="card"><h2>历史曲线</h2><p className="muted">{historyError ? `读取历史失败：${historyError}，正在重试…` : '正在读取历史数据…'}</p></section>}
+          {history ? <BankHistory history={history} decimals={bank.decimals} symbol={bank.label} /> : <section className="card"><h2>历史曲线</h2><p className="muted">{historyError ? `读取历史失败：${historyError}，正在重试…` : '正在读取历史数据…'}</p></section>}
           <section className="card"><h2>利率模型</h2>
             {curve ? <RateCurve curve={curve} optimalUtilization={bank.curve.optimal_utilization} /> : <div className="muted">正在读取利率曲线…</div>}
           </section>

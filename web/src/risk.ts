@@ -6,7 +6,7 @@ export interface RiskMetrics {
   weightedLiabilitiesInitUsd: number | null;
   weightedAssetsMaintUsd: number | null;
   weightedLiabilitiesMaintUsd: number | null;
-  healthFactor: number | null;
+  healthPercent: number | null;
   borrowCapacityUsed: number | null;
 }
 
@@ -61,7 +61,7 @@ function metrics(positions: Map<string, Position>, banks: Map<string, BankView>)
   for (const [address, p] of positions) {
     if (!p.deposit && !p.borrow) continue;
     const b = banks.get(address);
-    if (!b || b.price == null || !Number.isFinite(b.price)) return { ...sums, weightedAssetsInitUsd: null, weightedLiabilitiesInitUsd: null, weightedAssetsMaintUsd: null, weightedLiabilitiesMaintUsd: null, healthFactor: null, borrowCapacityUsed: null };
+    if (!b || b.price == null || !Number.isFinite(b.price)) return { ...sums, weightedAssetsInitUsd: null, weightedLiabilitiesInitUsd: null, weightedAssetsMaintUsd: null, weightedLiabilitiesMaintUsd: null, healthPercent: null, borrowCapacityUsed: null };
     const deposited = Number(p.deposit) / 10 ** b.decimals, borrowed = Number(p.borrow) / 10 ** b.decimals;
     const init = band(b, 'init'), maint = band(b, 'maint');
     sums.weightedAssetsInitUsd += deposited * init.low * b.weights.asset_init;
@@ -70,7 +70,9 @@ function metrics(positions: Map<string, Position>, banks: Map<string, BankView>)
     sums.weightedLiabilitiesMaintUsd += borrowed * maint.high * b.weights.liability_maint;
   }
   return { ...sums,
-    healthFactor: sums.weightedLiabilitiesMaintUsd ? sums.weightedAssetsMaintUsd / sums.weightedLiabilitiesMaintUsd : null,
+    healthPercent: sums.weightedAssetsMaintUsd > 0
+      ? (sums.weightedAssetsMaintUsd - sums.weightedLiabilitiesMaintUsd) / sums.weightedAssetsMaintUsd * 100
+      : sums.weightedLiabilitiesMaintUsd > 0 ? 0 : null,
     borrowCapacityUsed: sums.weightedAssetsInitUsd ? sums.weightedLiabilitiesInitUsd / sums.weightedAssetsInitUsd : sums.weightedLiabilitiesInitUsd ? null : 0 };
 }
 

@@ -4,13 +4,13 @@ import { riskMetrics } from './risk';
 export interface PortfolioSummary {
   netAssetsUsd: number | null;
   netApy: number | null;
-  healthFactor: number | null;
+  healthPercent: number | null;
   borrowCapacityUsed: number | null;
 }
 
 /** Dashboard adds net value and APY; risk metrics come from the shared preview calculation. */
 export function portfolioSummary(account: AccountView | null, banks: BankView[]): PortfolioSummary {
-  if (!account) return { netAssetsUsd: 0, netApy: null, healthFactor: null, borrowCapacityUsed: null };
+  if (!account) return { netAssetsUsd: 0, netApy: null, healthPercent: null, borrowCapacityUsed: null };
   let deposits = 0, borrows = 0, income = 0;
   let priced = true;
   const byAddress = new Map(banks.map((bank) => [bank.address, bank]));
@@ -26,7 +26,7 @@ export function portfolioSummary(account: AccountView | null, banks: BankView[])
   return {
     netAssetsUsd: priced ? deposits - borrows : null,
     netApy: priced && deposits > borrows ? income / (deposits - borrows) : null,
-    healthFactor: risk.healthFactor,
+    healthPercent: risk.healthPercent,
     borrowCapacityUsed: risk.borrowCapacityUsed,
   };
 }

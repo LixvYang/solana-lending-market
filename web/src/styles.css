@@ -84,7 +84,7 @@ tbody tr.pick:hover td.go { color: var(--s1); }
 .chart text { fill: var(--ink-3); font-size: 12px; }
 .chart .grid line { stroke: var(--grid); stroke-width: 1; }
 .chart .axis { stroke: var(--axis); stroke-width: 1; }
-.tip { position: absolute; pointer-events: none; background: var(--surface); box-shadow: none; border-radius: 8px; padding: 8px 10px; font-size: 12px; white-space: nowrap; z-index: 5; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); box-shadow: 0 8px 24px color-mix(in srgb, var(--slate-12) 12%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 12px; white-space: nowrap; z-index: 5; }
 .tip b { font-weight: 600; font-size: 14px; }
 .tip .row { display: flex; gap: 8px; align-items: baseline; }
 details.data { margin-top: 10px; } details.data summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
@@ -221,7 +221,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .asset-list li:last-child { border-bottom: 0; }
 .asset-list .n { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; } .asset-list .n .muted { font-size: 12px; }
 .health-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 0.5px solid var(--grid); }
-.risk-warn { color: var(--warning-text); }
+.risk-warn { color: var(--amber-11); }
 .faucet { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--blue-3); }
 .faucet .faucet-icons { justify-content: flex-start; }
 .faucet .notice { grid-column: 1 / -1; margin-top: 0; }
@@ -298,7 +298,10 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .history-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 8px; color: var(--ink-2); font-size: 12px; }
 .history-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .history-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
-.history-note { font-size: 12px; }
+.history-plot { position: relative; }
+.history-hover-line { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.history-tip .row { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.history-tip .row b { white-space: nowrap; }
 .risk-preview { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--slate-3); }
 .risk-health { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .risk-health > div { display: flex; flex-direction: column; }
@@ -354,3 +357,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .wallet-hint .faucet-icons { display: none; }
 
 .net.mock { color: var(--amber-11); background: var(--amber-3); }
+
+/* 绝对定位的提示框靠近容器右边缘时会被压窄(文字竖排);按内容宽度撑开、不换行。 */
+.history-tip { width: max-content; white-space: nowrap; }
+.history-tip .row > * { white-space: nowrap; flex-shrink: 0; }

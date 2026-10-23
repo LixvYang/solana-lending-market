@@ -1,6 +1,7 @@
 import type { AccountStatus, AccountView, PoolView } from '@contract';
 import { fmtToken, fmtUsd, short } from './format';
 import { TokenIcon } from './tokens';
+import { riskMetrics } from './risk';
 
 const ICON = {
   no_debt: <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="6" r="4.5" /><path d="M3.5 6h5" /></svg>,
@@ -25,16 +26,19 @@ export function Accounts({ accounts, pool }: { accounts: AccountView[]; pool: Po
     <div className="card">
       <h2>清算监控</h2>
       <div className="tablewrap"><table>
-        <thead><tr><th>账户</th><th>存款</th><th>借款</th><th className="n">距清算金额</th><th className="n">可借余量</th><th>状态</th></tr></thead>
-        <tbody>{accounts.map((a) => (
-          <tr key={a.address}>
+        <thead><tr><th>账户</th><th>存款</th><th>借款</th><th className="n">健康度</th><th className="n">可借余量</th><th>状态</th></tr></thead>
+        <tbody>{accounts.map((a) => {
+          const healthPercent = riskMetrics(pool.banks, a.balances).healthPercent;
+          const healthClass = healthPercent == null ? '' : healthPercent <= 0 || healthPercent < 10 ? 'bad-text' : healthPercent < 30 ? 'risk-warn' : 'good-text';
+          return <tr key={a.address}>
             <td><b>{a.label}</b><div className="muted mono">{short(a.address)}</div></td>
             <td>{list(a.balances.filter((b) => b.deposit !== '0').map((b) => ({ bank: b.bank, label: b.label, amount: b.deposit })))}</td>
             <td>{list(a.balances.filter((b) => b.borrow !== '0').map((b) => ({ bank: b.bank, label: b.label, amount: b.borrow })))}</td>
-            <td className="n">{fmtUsd(a.health.maint)}</td>
+            <td className={`n ${healthClass}`}>{healthPercent == null ? '—' : `${healthPercent.toFixed(1)}%${healthPercent <= 0 ? ' 可清算' : ''}`}</td>
             <td className="n">{fmtUsd(a.health.init)}</td>
             <td><StatusBadge status={a.status} /></td>
-          </tr>))}</tbody>
+          </tr>;
+        })}</tbody>
       </table></div>
     </div>
   );

@@ -27,7 +27,7 @@ export function RateCurve({ curve, optimalUtilization }: { curve: RateCurveView;
     // 十字线吸附最近的数据点：读者瞄的是利用率，不是一根 2px 的线。
     setHover(curve.points.reduce((best, p) => (Math.abs(p.utilization - u) < Math.abs(best.utilization - u) ? p : best)));
   };
-  const tipLeft = Math.min(78, Math.max(2, (x(active.utilization) / W) * 100 - 14));
+  const tipLeft = active.utilization > 0.65 ? 2 : Math.min(65, Math.max(2, (x(active.utilization) / W) * 100 - 14));
 
   return (
     <div>
@@ -38,7 +38,7 @@ export function RateCurve({ curve, optimalUtilization }: { curve: RateCurveView;
       </div>
       <div style={{ position: 'relative' }}>
         <svg ref={ref} className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${curve.label} 利率曲线`}
-             onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
+             onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}>
           <g className="grid">{yTicks.map((t) => <line key={t} x1={M.l} x2={W - M.r} y1={y(t)} y2={y(t)} />)}</g>
           {yTicks.map((t) => <text key={t} x={M.l - 8} y={y(t) + 4} textAnchor="end">{fmtPct(t, 0)}</text>)}
           {[0, 0.25, 0.5, 0.75, 1].map((u) => <text key={u} x={x(u)} y={H - 10} textAnchor="middle">{fmtPct(u, 0)}</text>)}

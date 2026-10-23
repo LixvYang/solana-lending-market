@@ -66,8 +66,8 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
       {deposits.length + debts.length > 0 && <div className="grid kpis portfolio-kpis">
         <div className="card"><div className="label">净资产</div><div className="hero">{fmtUsd(summary?.netAssetsUsd ?? null)}</div></div>
         <div className="card"><div className="label">净 APY</div><div className="stat">{fmtPct(summary?.netApy ?? null, 2)}</div></div>
-        <div className="card"><div className="label">健康因子</div><div className={`stat ${summary?.healthFactor != null && summary.healthFactor < 1.1 ? 'bad-text' : summary?.healthFactor != null && summary.healthFactor < 1.5 ? 'risk-warn' : summary?.healthFactor != null || deposits.length ? 'good-text' : ''}`}>
-          {!accountsReady ? '读取中…' : summary?.healthFactor == null ? deposits.length && !debts.length ? '∞ 无债务' : '—' : summary.healthFactor.toFixed(2)}</div></div>
+        <div className="card"><div className="label">健康度</div><div className={`stat ${summary?.healthPercent != null && summary.healthPercent <= 0 ? 'bad-text' : summary?.healthPercent != null && summary.healthPercent < 10 ? 'bad-text' : summary?.healthPercent != null && summary.healthPercent < 30 ? 'risk-warn' : summary?.healthPercent != null ? 'good-text' : ''}`}>
+          {!accountsReady ? '读取中…' : summary?.healthPercent == null ? '—' : `${summary.healthPercent.toFixed(1)}%${summary.healthPercent <= 0 ? ' 可清算' : ''}`}</div></div>
         <div className="card"><div className="label">已用借款额度</div><div className="stat">{fmtPct(summary?.borrowCapacityUsed ?? null)}</div>
           <div className={`meter ${(summary?.borrowCapacityUsed ?? 0) >= 1 ? 'crit' : (summary?.borrowCapacityUsed ?? 0) >= 0.75 ? 'warn' : ''}`}><i style={{ width: `${Math.max(0, Math.min(100, (summary?.borrowCapacityUsed ?? 0) * 100))}%` }} /></div></div>
       </div>}

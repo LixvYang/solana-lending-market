@@ -12,15 +12,15 @@ const account = (deposit: number, borrow: number): AccountView => ({
   health: { init: 0, maint: 0, assets_usd: deposit, liabilities_usd: borrow }, status: borrow ? 'healthy' : 'no_debt',
 });
 
-test('portfolio summary reports net value, estimated net APY, health factor and used capacity', () => {
+test('portfolio summary reports net value, estimated net APY, health percent and used capacity', () => {
   const result = portfolioSummary(account(100, 20), [bank]);
   assert.equal(result.netAssetsUsd, 80);
   assert.equal(result.netApy, 0.075);
-  assert.equal(result.healthFactor, 90 / 21);
+  assert.ok(Math.abs(result.healthPercent! - (90 - 21) / 90 * 100) < 1e-12);
   assert.equal(result.borrowCapacityUsed, 22 / 80);
 });
 
-test('no debt has no finite health factor and unknown balance prices stay hidden', () => {
-  assert.equal(portfolioSummary(account(100, 0), [bank]).healthFactor, null);
+test('no debt has 100 percent health and unknown balance prices stay hidden', () => {
+  assert.equal(portfolioSummary(account(100, 0), [bank]).healthPercent, 100);
   assert.equal(portfolioSummary({ ...account(10, 0), balances: [{ ...account(10, 0).balances[0], deposit_usd: null }] }, [bank]).netAssetsUsd, null);
 });

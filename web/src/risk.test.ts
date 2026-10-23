@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AccountView, BankView, BalanceView, PoolView } from '@contract';
 import { installMock } from './mock.js';
-import { previewRisk } from './risk.js';
+import { previewRisk, riskMetrics } from './risk.js';
 
 const bank = (address: string, label: string, price: number, weights: BankView['weights']): BankView => ({
   address, label, price, decimals: 0, mint: address, price_updated_at: null, oracle_feed: null, oracle_source: 'mock',
@@ -19,19 +19,19 @@ const balance = (b: BankView, deposit: string, borrow: string): BalanceView => (
   deposit_usd: Number(deposit) * (b.price ?? 0), borrow_usd: Number(borrow) * (b.price ?? 0),
 });
 
-test('deposit without debt has weighted assets and no health factor', () => {
+test('deposit without debt has 100 percent health', () => {
   const result = previewRisk([debt], [], { action: 'deposit', bank: debt.address, amount: '100' });
-  assert.equal(result.before.healthFactor, null);
+  assert.equal(result.before.healthPercent, null);
   assert.equal(result.after.weightedAssetsInitUsd, 100);
   assert.equal(result.after.weightedAssetsMaintUsd, 100);
-  assert.equal(result.after.healthFactor, null);
+  assert.equal(result.after.healthPercent, 100);
   assert.equal(result.after.borrowCapacityUsed, 0);
 });
 
-test('borrowing lowers health factor and reports remaining opening capacity', () => {
+test('borrowing lowers percentage health and reports remaining opening capacity', () => {
   const result = previewRisk([collateral, debt], [balance(collateral, '2', '0')], { action: 'borrow', bank: debt.address, amount: '50' });
-  assert.equal(result.before.healthFactor, null);
-  assert.ok(Math.abs(result.after.healthFactor! - 90 / 52.5) < 1e-12);
+  assert.equal(result.before.healthPercent, 100);
+  assert.ok(Math.abs(result.after.healthPercent! - (90 - 52.5) / 90 * 100) < 1e-12);
   assert.equal(Number(result.maxBorrow), Math.floor(80 / 1.1));
   assert.ok(Math.abs(result.after.borrowCapacityUsed! - 55 / 80) < 1e-12);
 });
@@ -69,7 +69,7 @@ test('deposits and repays are never blocked, even for an underwater account', ()
 test('repaying the full debt returns to the no-debt state', () => {
   const result = previewRisk([collateral, debt], [balance(collateral, '2', '0'), balance(debt, '0', '50')], { action: 'repay', bank: debt.address, amount: '50' });
   assert.equal(result.after.weightedLiabilitiesMaintUsd, 0);
-  assert.equal(result.after.healthFactor, null);
+  assert.equal(result.after.healthPercent, 100);
   assert.equal(result.blocked, null);
 });
 
@@ -113,6 +113,22 @@ test('有价格区间时按程序的保守价计算：资产取下沿、债务�
   assert.equal(result.maxBorrow, '0');
   // 按中间价(800 − 792 = 8)本会以为还能借 7;现在借 7 必须被拦下
   assert.equal(previewRisk([pyth, usd], balances, { action: 'borrow', bank: usd.address, amount: '7' }).blocked, '超过可借额度');
-  // 维持口径(健康因子):资产 10×99×0.9 = 891,债务 720×1×1.05 = 756
-  assert.ok(Math.abs(result.before.healthFactor! - 891 / 756) < 1e-12);
+  // 维持口径:资产 10×99×0.9 = 891,债务 720×1×1.05 = 756
+  assert.ok(Math.abs(result.before.healthPercent! - (891 - 756) / 891 * 100) < 1e-12);
+});
+
+test('health percent is 100 without debt, zero at liquidation, negative underwater, and null without assets', () => {
+  const weighted = { ...debt, decimals: 1, weights: { asset_init: 1, asset_maint: 1, liability_init: 1, liability_maint: 1 } };
+  const position = (deposit: string, borrow: string) => [{ bank: weighted.address, label: weighted.label, deposit, borrow, deposit_usd: null, borrow_usd: null }];
+  assert.equal(riskMetrics([weighted], position('100', '0')).healthPercent, 100);
+  assert.equal(riskMetrics([weighted], position('100', '100')).healthPercent, 0);
+  assert.equal(riskMetrics([weighted], position('100', '120')).healthPercent, -20);
+  assert.equal(riskMetrics([weighted], position('0', '100')).healthPercent, 0);
+  assert.equal(riskMetrics([weighted], position('0', '0')).healthPercent, null);
+});
+
+test('T17 example: weighted assets 2813.3 and debt 2384.8 produce 15.2 percent health', () => {
+  const weighted = { ...debt, decimals: 1, weights: { asset_init: 1, asset_maint: 1, liability_init: 1, liability_maint: 1 } };
+  const balances = [{ bank: weighted.address, label: weighted.label, deposit: '28133', borrow: '23848', deposit_usd: null, borrow_usd: null }];
+  assert.equal(riskMetrics([weighted], balances).healthPercent!.toFixed(1), '15.2');
 });

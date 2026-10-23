@@ -43,11 +43,11 @@ export function ActionForm({ banks, bank, mine, wallet, initialAction, onTransac
   const cap = action === 'deposit' ? held : action === 'withdraw' ? position?.deposit ?? '0' : action === 'repay' ? position?.borrow ?? '0' : risk?.maxBorrow == null ? null : minNative(risk.maxBorrow, liquidity);
   const def = ACTIONS.find((a) => a.id === action)!;
   const canBuild = Boolean(address && (all || (native && native !== '0')));
-  // 前后两个值保留两位小数看不出变化(如债务 2271、再借 2.1:1.1797 → 1.1786)时用三位，否则会显示"1.18 → 1.18"像没算。
-  const digits = risk && risk.before.healthFactor != null && risk.after.healthFactor != null && risk.before.healthFactor !== risk.after.healthFactor
-    && risk.before.healthFactor.toFixed(2) === risk.after.healthFactor.toFixed(2) ? 3 : 2;
-  const health = (value: number | null, assets: number | null) => value == null ? !assets ? '—' : '∞ 无债务' : value.toFixed(digits);
-  const healthClass = (value: number | null) => value == null ? '' : value < 1.1 ? 'bad-text' : value < 1.5 ? 'risk-warn' : 'good-text';
+  // 只有前后差异小于 0.1 个百分点时显示两位，避免看起来没有变化。
+  const digits = risk && risk.before.healthPercent != null && risk.after.healthPercent != null && risk.before.healthPercent !== risk.after.healthPercent
+    && risk.before.healthPercent.toFixed(1) === risk.after.healthPercent.toFixed(1) ? 2 : 1;
+  const health = (value: number | null) => value == null ? '—' : `${value.toFixed(digits)}%${value <= 0 ? ' 可清算' : ''}`;
+  const healthClass = (value: number | null) => value == null ? '' : value <= 0 || value < 10 ? 'bad-text' : value < 30 ? 'risk-warn' : 'good-text';
   const capacity = risk?.after.borrowCapacityUsed;
   const capClass = capacity == null ? '' : capacity >= 1 ? 'crit' : capacity >= 0.75 ? 'warn' : '';
   const collateral = mine?.balances.filter((b) => b.deposit !== '0') ?? [];
@@ -92,7 +92,7 @@ export function ActionForm({ banks, bank, mine, wallet, initialAction, onTransac
     {action === 'borrow' && position && position.deposit !== '0' && <p className="hint">你在 {bank.label} 里有存款。借款会先扣除同资产存款;想借出其他资产，请用 {bank.label} 做抵押。</p>}
     {!all && amount && !native && <p className="notice bad">数量格式不对,或小数位超过 {bank.decimals} 位。</p>}
     {risk && hasRiskAmount && <section className="risk-preview" aria-label="交易后风险预估">
-      <div className="risk-health"><div><span className="label">健康因子</span><div><span className={healthClass(risk.before.healthFactor)}>{health(risk.before.healthFactor, risk.before.weightedAssetsMaintUsd)}</span> <span className="muted">→</span> <b className={healthClass(risk.after.healthFactor)}>{health(risk.after.healthFactor, risk.after.weightedAssetsMaintUsd)}</b></div></div>
+      <div className="risk-health"><div><span className="label">健康度</span><div><span className={healthClass(risk.before.healthPercent)}>{health(risk.before.healthPercent)}</span> <span className="muted">→</span> <b className={healthClass(risk.after.healthPercent)}>{health(risk.after.healthPercent)}</b></div></div>
         {risk.liquidationPrice != null && collateral.length === 1 && <div className="risk-price"><span className="label">参考清算价</span><b>{fmtUsd(risk.liquidationPrice)} / {collateral[0].label}</b></div>}</div>
       <div className="label">已用借款额度 {risk.after.borrowCapacityUsed == null ? '—' : fmtPct(risk.after.borrowCapacityUsed)}</div>
       <div className={`meter ${capClass}`}><i style={{ width: `${Math.max(0, Math.min(100, (capacity ?? 0) * 100))}%` }} /></div>

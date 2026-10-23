@@ -21,7 +21,7 @@ test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe with
   assert.deepEqual(JSON.parse((await route(db,'GET','/api/config',undefined,{faucetUrl:'http://localhost:8788/faucet'} as never)).body),{faucet_url:'http://localhost:8788/faucet'});
   assert.equal((await route(db,'POST','/api/pool')).status,404);assert.equal((await route(db,'OPTIONS','/api/pool')).status,204);
   const bad:Db={query:async()=>{throw Error('DATABASE_URL postgres://secret RPC_URL https://host?api-key=secret');},transaction:db.transaction};
-  const failure=await route(bad,'GET','/api/healthz');assert.equal(failure.status,503);assert.equal(failure.body,'{"error":"database unavailable"}');
+  const failure=await route(bad,'GET','/api/healthz');assert.equal(failure.status,503);assert.equal(failure.body,'{"error":"database unavailable","code":"API_ERROR"}');
   await db.query("INSERT INTO raw_tx(signature,slot,tx) VALUES ('big',9223372036854775807,'{}'::jsonb)");
   await db.query("INSERT INTO instructions(signature,ix_index,slot,name,args,accounts,remaining) VALUES ('big',0,9223372036854775807,'unknown','{}','{}','[]')");
   const activity=JSON.parse((await route(db,'GET','/api/activity')).body);assert.equal(activity.items[0].slot,'9223372036854775807');

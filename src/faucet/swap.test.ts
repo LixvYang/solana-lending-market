@@ -97,7 +97,7 @@ test('报价的边界:同一资产、未知资产、太小、太大、非法数�
     ['tUSDC', 'SOL', '0.01'], ['tUSDC', 'SOL', '101'], ['SOL', 'tUSDC', '0'], ['SOL', 'tUSDC', 'abc'], ['SOL', 'tUSDC', '-1']])
     await assert.rejects(swap.quote({ wallet, from, to, amount }), (e: unknown) => status(e) === 400, `${from}→${to} ${amount}`);
   await assert.rejects(swap.quote({ wallet: 'not-a-key', from: 'SOL', to: 'tSOL', amount: '0.1' }), (e: unknown) => status(e) === 400);
-  await assert.rejects(swapWith(stocked(1n)).quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503);    // 代币不足
+  await assert.rejects(swapWith(stocked(1n)).quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503 && (e as { code?: string }).code === 'DESK_INSUFFICIENT');    // 代币不足
   // SOL 不足:要付出 0.5 SOL,兑换台有 0.52 SOL,但必须保留 0.05(付 ATA 租金等),可用只有 0.47 → 拒绝;
   // 有 0.56 SOL 时可用 0.51 → 放行。正好卡在"保留金额"这条规则上,去掉保留就会放行前一种。
   await assert.rejects(swapWith(stocked(10n ** 15n, 520_000_000)).quote({ wallet, from: 'tUSDC', to: 'SOL', amount: '25' }), (e: unknown) => status(e) === 503);
@@ -157,6 +157,21 @@ test('转发守卫:用户签完的兑换交易(含 SOL 收款方向)放行;不�
   await assert.rejects(swap.submit({ transaction: Buffer.from(withOtherProgram.serialize()).toString('base64') }), /not a swap transaction/);
 });
 
+test('确认兑换按报价记录钱包、卖出/买入数量;记录失败不改变已确认状态', async () => {
+  const records: unknown[][] = [];
+  const swap = createSwap(desk, stocked(), config, fakeClock(), async (...args) => { records.push(args); });
+  const quote = await swap.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  const signed = VersionedTransaction.deserialize(Buffer.from(quote.transaction, 'base64')); signed.sign([user]);
+  const sent = await swap.submit({ transaction: Buffer.from(signed.serialize()).toString('base64') });
+  assert.equal(sent.status, 'confirmed'); assert.deepEqual(records[0], [sent.signature, user.publicKey.toBase58(),
+    { symbol: 'SOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '25000000', decimals: 6 }]);
+
+  const broken = createSwap(desk, stocked(), config, fakeClock(), async () => { throw Error('db unavailable'); });
+  const second = await broken.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  const secondTx = VersionedTransaction.deserialize(Buffer.from(second.transaction, 'base64')); secondTx.sign([user]);
+  assert.equal((await broken.submit({ transaction: Buffer.from(secondTx.serialize()).toString('base64') })).status, 'confirmed');
+});
+
 test('HTTP 路由:只有配置了兑换台才有 /swap/*,否则 404', async () => {
   const noGrant = async () => { throw new Error('unused'); };
   assert.equal((await faucetRoute('GET', '/swap/rates', undefined, '1.1.1.1', noGrant as never)).status, 404);
@@ -184,4 +199,23 @@ test('单个资产价格不可用时，汇率表照常返回其他资产，只�
   const wallet = user.publicKey.toBase58();
   assert.equal((await swap.quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' })).out_amount, '25000000');
   await assert.rejects(swap.quote({ wallet, from: 'SOL', to: 'tHYPE', amount: '0.5' }));
+});
+
+// 报价放在内存里时，兑换台在报价与提交之间重启、或云上多实例(报价落 A、提交落 B)就会漏记。
+// 改为从提交上来的交易本身解析两侧转账：不需要内存状态，也不调用 RPC。
+test('报价与提交落在不同的兑换台实例上，仍按交易本身记录两侧数量(SOL↔代币、代币↔代币)', async () => {
+  for (const [from, to, amount, expected] of [
+    ['SOL', 'tUSDC', '0.5', [{ symbol: 'SOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '25000000', decimals: 6 }]],
+    ['pSOL', 'tUSDC', '0.5', [{ symbol: 'pSOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '52354454', decimals: 6 }]],
+    ['tUSDC', 'SOL', '25', [{ symbol: 'tUSDC', amount: '25000000', decimals: 6 }, { symbol: 'SOL', amount: '500000000', decimals: 9 }]],
+  ] as const) {
+    const quoting = createSwap(desk, stocked(), config, fakeClock());
+    const records: unknown[][] = [];
+    const submitting = createSwap(desk, stocked(), config, fakeClock(), async (...args) => { records.push(args); });
+    const quote = await quoting.quote({ wallet: user.publicKey.toBase58(), from, to, amount });
+    const signed = VersionedTransaction.deserialize(Buffer.from(quote.transaction, 'base64')); signed.sign([user]);
+    const sent = await submitting.submit({ transaction: Buffer.from(signed.serialize()).toString('base64') });
+    assert.equal(sent.status, 'confirmed');
+    assert.deepEqual(records[0], [sent.signature, user.publicKey.toBase58(), ...expected], `${from}→${to}`);
+  }
 });

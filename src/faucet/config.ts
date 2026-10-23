@@ -2,7 +2,7 @@
 import { PublicKey } from '@solana/web3.js';
 import type { BankView } from '../api/types';
 import { PYTH_BANKS } from '../oracle/pyth-banks';
-export interface Grant { label: string; mint: PublicKey; amount: bigint }
+export interface Grant { label: string; mint: PublicKey; amount: bigint; decimals?: number }
 export function nativeAmount(value: string, decimals: number): bigint {
   if (!/^\d+(?:\.\d+)?$/.test(value)) throw Error('invalid amount');
   const [whole, fraction = ''] = value.split('.');
@@ -22,7 +22,7 @@ export function faucetGrants(banks: BankView[], env: NodeJS.ProcessEnv = process
     const bank = banks.find(b => b.label === label);
     if (!bank) { if (label.startsWith('p') || label === 'tHYPE') return []; throw Error('faucet bank unavailable'); }
     const [name, fallback] = GRANTS[label];
-    return [{ label, mint: new PublicKey(bank.mint), amount: nativeAmount(env[name] ?? fallback, bank.decimals) }];
+    return [{ label, mint: new PublicKey(bank.mint), amount: nativeAmount(env[name] ?? fallback, bank.decimals), decimals: bank.decimals }];
   });
 }
 export function dailyLimit(value: string | undefined): number {

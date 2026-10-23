@@ -14,7 +14,8 @@
     "@solana/web3.js": "1.95.8",
     "buffer": "6.0.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "recharts": "3.10.1"
   },
   "devDependencies": {
     "@types/node": "22.10.2",

@@ -11,6 +11,7 @@ import { buildTransaction, PriceStale } from './builder';
 import { sendTransaction } from './send';
 import { getWallet } from './wallet';
 import { indexConfirmed } from './confirmed';
+import { getWalletHistory } from './wallet-history';
 import type { ClientConfig } from './types';
 import type { WalletServices } from './wallet-rpc';
 export function portNumber(value: string | undefined): number {
@@ -43,6 +44,16 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
     }
     if (method === 'OPTIONS')
       return { status: 204, headers, body: '' };
+    let body: unknown;
+    const history = /^\/api\/wallet\/([^/]+)\/history$/.exec(url.pathname);
+    if (method === 'GET' && history) {
+      let wallet: string;
+      try { wallet = decodeURIComponent(history[1]); } catch { throw new ApiError(400, 'invalid public key'); }
+      const key = address(wallet, 32), rawLimit = url.searchParams.get('limit');
+      if (rawLimit !== null && !/^\d+$/.test(rawLimit)) throw new ApiError(400, 'invalid limit');
+      body = await getWalletHistory(db, key, { before: url.searchParams.get('before') ?? undefined, limit: rawLimit === null ? undefined : Number(rawLimit) });
+      return { status: 200, headers, body: toJson(body) };
+    }
     const walletRoute = method === 'POST' && ['/api/build', '/api/send'].includes(url.pathname) || method === 'GET' && /^\/api\/wallet\/[^/]+$/.test(url.pathname);
     if (walletRoute) {
       if (!services) throw new ApiError(503, 'wallet RPC unavailable');
@@ -60,7 +71,6 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
     }
     if (method !== 'GET')
       throw new ApiError(404, 'not found');
-    let body: unknown;
     switch (url.pathname) {
       case '/healthz':
       case '/api/healthz':
@@ -118,7 +128,7 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
   catch (error) {
     // 驱动异常可包含带凭据的 URL；只返回固定消息，不记录异常对象或请求 URL。
     return { status: error instanceof ApiError ? error.status : 500, headers,
-      body: toJson({ error: error instanceof PriceStale ? error.view : error instanceof ApiError ? error.message : 'internal server error' }) };
+      body: toJson({ error: error instanceof ApiError ? error.message : '服务器暂时不可用，请稍后重试。', code: error instanceof ApiError ? error.code : 'INTERNAL_ERROR', ...(error instanceof ApiError && error.params ? { params: error.params } : {}) }) };
   }
 }
 export async function handle(db: Db, req: IncomingMessage, res: ServerResponse, services?: WalletServices): Promise<void> {
@@ -127,7 +137,7 @@ export async function handle(db: Db, req: IncomingMessage, res: ServerResponse, 
     const input = req.method === 'POST' ? await readJson(req) : undefined;
     result = await route(db, req.method ?? 'GET', req.url ?? '/', input, services);
   } catch (error) {
-    result = { status: error instanceof ApiError ? error.status : 500, headers: corsHeaders, body: toJson({ error: error instanceof ApiError ? error.message : 'internal server error' }) };
+    result = { status: error instanceof ApiError ? error.status : 500, headers: corsHeaders, body: toJson({ error: error instanceof ApiError ? error.message : '服务器暂时不可用，请稍后重试。', code: error instanceof ApiError ? error.code : 'INTERNAL_ERROR', ...(error instanceof ApiError && error.params ? { params: error.params } : {}) }) };
   }
   for (const [key, value] of Object.entries(result.headers))
     res.setHeader(key, value);

@@ -1,26 +1,23 @@
+import { useId } from 'react';
+import { useT } from './i18n';
 /** INPUT: API/组件传入的 token symbol。 OUTPUT: 代币名称、说明、内联 SVG 图标与价格来源角标。
  * POSITION: 前端按符号登记展示信息;测试币不依赖链上 Metaplex 元数据。 SYNC: 新银行符号要补齐此表和图标。
  */
 export interface TokenMeta { symbol: string; name: string; description: string; badge?: { text: string; color: string } }
 
-const TOKENS: Record<string, TokenMeta> = {
-  SOL: { symbol: 'SOL', name: 'Solana', description: 'Solana 原生代币,用来付手续费和账户租金。兑换台按 Pyth SOL/USD 实时价计价。' },
-  pSOL: { symbol: 'pSOL', name: 'Pyth 定价测试 SOL', badge: { text: 'P', color: 'var(--violet-9)' },
-    description: '价格跟随 Pyth devnet 的 SOL/USD 实时行情(约 1–2 分钟更新一次),用来演示真实预言机。' },
-  pBTC: { symbol: 'pBTC', name: 'Pyth 定价测试 BTC', badge: { text: 'P', color: 'var(--violet-9)' },
-    description: '测试用 BTC,价格跟随 Pyth devnet 的 BTC/USD 实时行情;不是可兑换或提取的真实比特币。' },
-  pETH: { symbol: 'pETH', name: 'Pyth 定价测试 ETH', badge: { text: 'P', color: 'var(--violet-9)' },
-    description: '测试用 ETH,价格跟随 Pyth devnet 的 ETH/USD 实时行情;不是可兑换或提取的真实以太币。' },
-  tHYPE: { symbol: 'tHYPE', name: '固定价格测试 HYPE', badge: { text: 't', color: 'var(--orange-9)' },
-    description: '测试用 HYPE,价格由我们固定为 $80,后台程序定时写上链;仅用于 devnet 借贷演示。' },
-  tSOL: { symbol: 'tSOL', name: '测试 SOL', badge: { text: 't', color: 'var(--orange-9)' },
-    description: '用于借贷与清算演示的测试 SOL，价格由项目控制。' },
-  tUSDC: { symbol: 'tUSDC', name: '测试 USDC', badge: { text: 't', color: 'var(--orange-9)' },
-    description: '用于借款与清算演示的测试稳定币，按 $1 计价。' },
-};
-
-export const tokenMeta = (symbol: string): TokenMeta =>
-  TOKENS[symbol] ?? { symbol, name: symbol, description: '没有登记的代币。' };
+export function tokenMeta(symbol: string, t: ReturnType<typeof useT>['t']): TokenMeta {
+  const pyth = { color: 'var(--violet-9)' }, test = { color: 'var(--orange-9)' };
+  const tokens: Record<string, TokenMeta> = {
+    SOL: { symbol, name: t.tokenSolName, description: t.tokenSolDescription },
+    pSOL: { symbol, name: t.tokenPsolName, badge: { text: 'P', ...pyth }, description: t.tokenPsolDescription },
+    pBTC: { symbol, name: t.tokenPbtcName, badge: { text: 'P', ...pyth }, description: t.tokenPbtcDescription },
+    pETH: { symbol, name: t.tokenPethName, badge: { text: 'P', ...pyth }, description: t.tokenPethDescription },
+    tHYPE: { symbol, name: t.tokenThypeName, badge: { text: 't', ...test }, description: t.tokenThypeDescription },
+    tSOL: { symbol, name: t.tokenTsolName, badge: { text: 't', ...test }, description: t.tokenTsolDescription },
+    tUSDC: { symbol, name: t.tokenTusdcName, badge: { text: 't', ...test }, description: t.tokenTusdcDescription },
+  };
+  return tokens[symbol] ?? { symbol, name: symbol, description: t.tokenNoDescription };
+}
 
 // Solana 标志的三根斜条(32×32 坐标)。
 const BARS = 'M11 9.2h13l-3 3.3H8zM8 14.4h13l3 3.3H11zM11 19.6h13l-3 3.3H8z';
@@ -56,8 +53,11 @@ function Base({ symbol, id }: { symbol: string; id: string }) {
 
 /** 代币图标。size 为像素;角标标明"测试币"。 */
 export function TokenIcon({ symbol, size = 24 }: { symbol: string; size?: number }) {
-  const meta = tokenMeta(symbol), id = `tk-${symbol}-${size}`;
-  const known = symbol in TOKENS;
+  // 渐变 id 必须每个实例唯一：曾按"符号 + 尺寸"命名，同页重复时若第一个在隐藏的 tab 里(display:none),
+  // Chrome 会让其他图标引用到的渐变失效——pSOL 的圆底整个消失，只剩角标。
+  const { t } = useT();
+  const meta = tokenMeta(symbol, t), id = `tk-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const known = ['SOL', 'pSOL', 'pBTC', 'pETH', 'tHYPE', 'tSOL', 'tUSDC'].includes(symbol);
   return (
     <svg className="token-icon" width={size} height={size} viewBox="-1 -1 36 36" role="img" aria-label={symbol}>
       {known ? <Base symbol={symbol} id={id} /> : <>
@@ -73,7 +73,8 @@ export function TokenIcon({ symbol, size = 24 }: { symbol: string; size?: number
 
 /** 图标 + 符号 + 名称,用在表格第一列和选择器里。 */
 export function TokenName({ symbol, size = 32, sub }: { symbol: string; size?: number; sub?: React.ReactNode }) {
-  const meta = tokenMeta(symbol);
+  const { t } = useT();
+  const meta = tokenMeta(symbol, t);
   return (
     <span className="token-name">
       <TokenIcon symbol={symbol} size={size} />
@@ -84,5 +85,6 @@ export function TokenName({ symbol, size = 32, sub }: { symbol: string; size?: n
 
 /** 只显示用户需要辨认的 Pyth 行情来源。 */
 export function SourceChip({ source }: { source: string | null | undefined }) {
-  return source === 'pyth' ? <span className="src live">Pyth</span> : null;
+  const { t } = useT();
+  return source === 'pyth' ? <span className="src live">{t.sourcePyth}</span> : null;
 }

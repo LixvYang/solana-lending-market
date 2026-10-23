@@ -10,6 +10,7 @@ import { createSwap, type SwapAssetConfig } from '../src/faucet/swap';
 import { oraclePrices } from '../src/faucet/prices';
 import { FEED_IDS, pythPushAccount } from '../src/oracle/pyth';
 import { nativeAmount } from '../src/faucet/config';
+import { insertDeskEvent } from '../src/store/desk-events';
 import { PublicKey } from '@solana/web3.js';
 import { serviceKeypair, cliRpc } from './admin-runtime';
 async function main() {
@@ -28,8 +29,10 @@ async function main() {
     ...tokens.map(b => ({ symbol: b.label as SwapAssetConfig['symbol'], decimals: b.decimals, mint: new PublicKey(b.mint) }))];
   const oracles = { SOL: pythPushAccount(FEED_IDS['SOL/USD']), ...Object.fromEntries(tokens.map(b => [b.label, new PublicKey(b.oracle_feed!)])) };
   const swap = createSwap(payer, rpc, { assets, price: oraclePrices(rpc, oracles),
-    minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') });
-  const server = createFaucetServer(createFaucet(payer, rpc, grants, dailyLimit(process.env.FAUCET_DAILY_MAX)), swap,
+    minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') }, undefined,
+    (signature, wallet, from, to) => insertDeskEvent(db, { signature, wallet, kind: 'swap', from, to, status: 'confirmed' }));
+  const server = createFaucetServer(createFaucet(payer, rpc, grants, dailyLimit(process.env.FAUCET_DAILY_MAX), undefined,
+    (signature, wallet, details) => insertDeskEvent(db, { signature, wallet, kind: 'faucet', details, status: 'confirmed' })), swap,
     async () => { await db.query('SELECT 1'); });
   server.on('error', () => { console.error('faucet server failed'); void db.close(); process.exitCode = 1; });
   const host = hostAddress();

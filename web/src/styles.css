@@ -5,6 +5,7 @@
   --ink: var(--slate-12); --ink-2: var(--slate-11); --ink-3: var(--slate-11);
   --grid: var(--slate-6); --axis: var(--slate-7); --ring: color-mix(in srgb, var(--slate-12) 12%, transparent);
   --s1: var(--blue-9); --s2: var(--orange-9); --s3: var(--green-9); --s4: var(--amber-9);
+  --chart-borrow: var(--blue-9); --chart-deposit: var(--orange-10);
   --s5: var(--red-9); --s6: var(--green-11); --s7: var(--violet-9); --s8: var(--red-9);
   --track: var(--blue-3); --fill: var(--blue-9);
   --good: var(--green-11); --warning: var(--amber-9); --warning-text: var(--amber-12);
@@ -80,11 +81,12 @@ table.activity td .mono.muted { font-size: 12px; margin-top: 2px; }
 td.go { color: var(--ink-3); font-size: 12px; white-space: nowrap; text-align: right; }
 tbody tr.pick:hover td.go { color: var(--s1); }
 
-.chart { width: 100%; height: auto; display: block; touch-action: none; }
+.chart { width: 100%; height: auto; display: block; touch-action: pan-y; }
 .chart text { fill: var(--ink-3); font-size: 12px; }
 .chart .grid line { stroke: var(--grid); stroke-width: 1; }
 .chart .axis { stroke: var(--axis); stroke-width: 1; }
-.tip { position: absolute; pointer-events: none; background: var(--surface); box-shadow: none; border-radius: 8px; padding: 8px 10px; font-size: 12px; white-space: nowrap; z-index: 5; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); box-shadow: 0 8px 24px color-mix(in srgb, var(--slate-12) 12%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 12px; white-space: nowrap; z-index: 5; }
+.recharts-tooltip-wrapper .tip { position: static; max-width: min(300px, calc(100vw - 32px)); white-space: normal; }
 .tip b { font-weight: 600; font-size: 14px; }
 .tip .row { display: flex; gap: 8px; align-items: baseline; }
 details.data { margin-top: 10px; } details.data summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
@@ -221,7 +223,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .asset-list li:last-child { border-bottom: 0; }
 .asset-list .n { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; } .asset-list .n .muted { font-size: 12px; }
 .health-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 0.5px solid var(--grid); }
-.risk-warn { color: var(--warning-text); }
+.risk-warn { color: var(--amber-11); }
 .faucet { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--blue-3); }
 .faucet .faucet-icons { justify-content: flex-start; }
 .faucet .notice { grid-column: 1 / -1; margin-top: 0; }
@@ -266,6 +268,13 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .portfolio-lists .card { min-width: 0; }
 .portfolio-lists .asset-list li { min-width: 0; }
 .portfolio-lists .asset-list .n { min-width: 56px; }
+.wallet-history-list { display: grid; }
+.wallet-history-row { display: grid; grid-template-columns: 90px 72px minmax(0, 1fr) 52px auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 0; border-top: 0.5px solid var(--slate-6); font-size: 14px; }
+.wallet-history-row time { font-size: 12px; white-space: nowrap; }
+.wallet-history-assets { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.wallet-history-assets > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wallet-history-row > span:nth-last-child(2) { color: var(--good); }
+@media (max-width: 640px) { .wallet-history-row { grid-template-columns: 1fr auto; gap: 6px 10px; } .wallet-history-row time { grid-column: 1; } .wallet-history-row > b { grid-column: 1; } .wallet-history-assets { grid-column: 1 / -1; } .wallet-history-row > span:nth-last-child(2) { grid-column: 1; } }
 @media (max-width: 640px) {
   .portfolio-lists { grid-template-columns: minmax(0, 1fr); }
   .wallet-hint { align-items: flex-start; }
@@ -287,11 +296,12 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .asset-status > div { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--slate-3); }
 .asset-status b { font-size: 14px; }
 .asset-status .muted { font-size: 12px; }
-.bank-history .grid-line { stroke: var(--grid); stroke-width: 1; }
-.history-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 8px; color: var(--ink-2); font-size: 12px; }
-.history-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.history-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
-.history-note { font-size: 12px; }
+.history-plot, .rate-plot { width: 100%; min-width: 0; }
+/* 不要给 .recharts-wrapper 设 max-width:100%:Recharts 3 的 ResponsiveContainer 外面套着一层宽度为 0 的测量容器，
+   max-width 按 0 计算，整张图宽度变 0、什么都看不见(2026-10-23 实测)。宽度交给 ResponsiveContainer。 */
+.history-plot .recharts-tooltip-wrapper .tip .row, .rate-plot .recharts-tooltip-wrapper .tip .row { justify-content: space-between; }
+.rate-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; }
+.rate-legend > span { display: inline-flex; align-items: center; }
 .risk-preview { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--slate-3); }
 .risk-health { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .risk-health > div { display: flex; flex-direction: column; }
@@ -340,10 +350,20 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
   .brand { gap: 8px; }
   .logo { width: 30px; height: 30px; }
   .wallet-adapter-button { padding: 0 10px !important; }
+  h1 { font-size: 20px; }
+  /* 英文产品名加钱包按钮在 390px 宽放不下(会换行或互相压住);窄屏页头只留图标与 Devnet 标记，名字留给读屏。 */
+  .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
+.top h1, .top-actions .btn, .wallet-adapter-button { white-space: nowrap; }
 
 /* 提示条里的领取按钮不需要水龙头卡片自带的底色和内边距(否则是框中框)。 */
 .wallet-hint .faucet { display: inline-flex; margin: 0; padding: 0; background: none; }
 .wallet-hint .faucet-icons { display: none; }
 
 .net.mock { color: var(--amber-11); background: var(--amber-3); }
+
+/* 绝对定位的提示框靠近容器右边缘时会被压窄(文字竖排);按内容宽度撑开、不换行。 */
+:root[data-theme='dark'] { --chart-deposit: var(--orange-8); }
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) { --chart-deposit: var(--orange-8); }
+}

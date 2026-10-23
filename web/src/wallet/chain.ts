@@ -1,12 +1,13 @@
 import type { BuildRequest, BuildResponse, FaucetResponse, SendResponse, SwapQuoteRequest, SwapQuoteResponse, SwapRatesView, WalletView } from '@contract';
-import { apiUrl } from '../api';
+import { apiUrl, ApiResponseError } from '../api';
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(apiUrl(url), init);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const e = (body as { error?: string | { message?: string } }).error;
-    throw new Error(typeof e === 'string' ? e : e?.message ?? `${url} → ${response.status}`);
+    const e = body as { error?: string | { message?: string }; code?: string; params?: Record<string, string> };
+    const message = typeof e.error === 'string' ? e.error : e.error?.message;
+    throw new ApiResponseError(message ?? `${url} → ${response.status}`, e.code, e.params);
   }
   return body as T;
 }

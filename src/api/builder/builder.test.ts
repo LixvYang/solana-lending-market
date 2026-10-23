@@ -147,7 +147,7 @@ test('不能刷新的才报 PriceStale(且文案不提内部细节):没有价格
     for (const svc of [services({ getAccountInfo: async () => null }),                                   // 账户不存在
       services({ getAccountInfo: async () => ({ ...feedInfo(1), owner: PublicKey.default }) })]) {         // owner 不在允许集合
       await assert.rejects(buildTransaction(db, svc, borrow), (e: unknown) => e instanceof PriceStale && e.status === 409
-        && e.view.name === 'PriceStale' && !/维护|进程|keeper/.test(e.view.message));
+        && e.code === 'PRICE_UNAVAILABLE' && !/维护|进程|keeper/.test(e.message));
     }
     // 从未有过价格(sample_size 为 0)
     const never = feedInfo(1700000000); never.data[2215] = 0;
@@ -247,7 +247,7 @@ test('Pyth 价格超过银行的 oracle_max_age(300 秒)时拒绝构建:我们�
     const { by, wallet, published, svc } = await seedPyth(db);
     await buildTransaction(db, svc(published + 300), { action: 'borrow', wallet, bank: by.bank_tUSDC, amount: '1000000' }); // 恰好 300 秒仍可用
     await assert.rejects(buildTransaction(db, svc(published + 301), { action: 'borrow', wallet, bank: by.bank_tUSDC, amount: '1000000' }),
-      (e: unknown) => e instanceof PriceStale && /Pyth/.test(e.view.message));
+      (e: unknown) => e instanceof PriceStale && e.code === 'PRICE_UNAVAILABLE' && /Pyth/.test(e.message));
     // 存款不看价格,Pyth 过期也照常构建。
     await buildTransaction(db, svc(published + 10_000), { action: 'deposit', wallet, bank: by.bank_pSOL, amount: '1' });
   } finally { await db.close(); }

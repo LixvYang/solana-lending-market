@@ -27,9 +27,8 @@ async function clusterTime(services: WalletServices): Promise<bigint> {
 }
 
 export class PriceStale extends ApiError {
-  // 只在价格确实无法刷新时出现(比如价格账户不是我们的 mock,或从未有过价格)。不向用户暴露"维护进程"这类内部细节。
-  readonly view;
-  constructor(message = '价格暂时不可用，请稍后重试。') { super(409, message); this.view = { code: null, name: 'PriceStale', message }; }
+  // 只在价格确实无法刷新时出现;公开稳定错误码，不向用户暴露维护细节。
+  constructor(message = '价格暂时不可用，请稍后重试。') { super(409, message, 'PRICE_UNAVAILABLE'); }
 }
 export async function buildTransaction(db: Db, services: WalletServices, input: unknown): Promise<BuildResponse> {
   const request = buildInput(input), pool = await getPool(db), state = await readState(db);

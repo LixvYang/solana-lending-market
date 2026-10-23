@@ -26,6 +26,9 @@ export function App() {
   const address = publicKey?.toBase58() ?? null;
   const [tx, setTx] = useState<string | null>(null);
   const [result, setResult] = useState<SendResponse | null>(null);
+  // 兑换只是 SOL/SPL 转账，不经过 marginfi,不会进借贷市场的记录;它的 toast 不能给"交易详情"(打开只会是查不到)。
+  const [resultIsLending, setResultIsLending] = useState(false);
+  const reportSwap = useCallback((next: SendResponse) => { setResult(next); setResultIsLending(false); }, []);
   const [pendingSync, setPendingSync] = useState<{ signature: string; startedAt: number } | null>(null);
   const [syncExpired, setSyncExpired] = useState(false);
   // 用户刚发完交易时加速轮询 45 秒(1.5 秒一次),这样页面几秒内就能反映出来;平时 5 秒一次。
@@ -48,6 +51,7 @@ export function App() {
   const syncStatus = pendingSync ? syncExpired ? '数据稍后更新' : '同步中' : null;
   const reportResult = useCallback((next: SendResponse) => {
     setResult(next);
+    setResultIsLending(true);
     if (next.status === 'confirmed') { setPendingSync({ signature: next.signature, startedAt: Date.now() }); setSyncExpired(false); }
   }, []);
   const selected = pool.data?.banks.find((b) => b.label === marketSymbol) ?? null;
@@ -104,7 +108,7 @@ export function App() {
             <WalletPanel banks={pool.data.banks} accounts={accounts.data ?? []} accountsReady={accounts.data !== null} onTransaction={boost} onGoSwap={goSwap} wallet={wallet ?? null} syncStatus={syncStatus} />
           </TabPanel>
           <TabPanel id="swap" active={tab}>
-            <SwapPage faucetUrl={config?.faucet_url ?? null} onDone={boost} wallet={wallet} onResult={setResult} active={tab === 'swap'} />
+            <SwapPage faucetUrl={config?.faucet_url ?? null} onDone={boost} wallet={wallet} onResult={reportSwap} active={tab === 'swap'} />
           </TabPanel>
         </>
       )}
@@ -114,7 +118,7 @@ export function App() {
       {result && <div className={`transaction-toast ${result.status === 'confirmed' ? 'ok' : 'bad'}`} role="status" aria-live="polite">
         <button className="transaction-toast-close" type="button" aria-label="关闭提示" onClick={() => setResult(null)}>×</button>
         <b>{result.status === 'confirmed' ? '交易已确认' : result.status === 'timeout' ? '确认超时，交易可能仍会上链' : `交易失败${result.error?.message ? `：${result.error.message}` : ''}`}</b>
-        <div className="transaction-toast-links"><a href={explorer(result.signature)} target="_blank" rel="noreferrer">在 Explorer 查看</a><button className="linkish" onClick={() => setTx(result.signature)}>交易详情</button></div>
+        <div className="transaction-toast-links"><a href={explorer(result.signature)} target="_blank" rel="noreferrer">在 Explorer 查看</a>{resultIsLending && <button className="linkish" onClick={() => setTx(result.signature)}>交易详情</button>}</div>
       </div>}
       {tx && <Xray signature={tx} onClose={close} />}
     </div>

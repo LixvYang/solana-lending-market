@@ -81,7 +81,8 @@ const rowOf = (view: XrayView, ix: XrayInstruction) =>
 export function Xray({ signature, onClose }: { signature: string; onClose: () => void }) {
   const [view, setView] = useState<XrayView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { api.xray(signature).then(setView).catch((e) => setError(String(e.message ?? e))); }, [signature]);
+  // 404 = 这笔交易不在借贷市场的记录里(例如兑换、普通转账);不要把后端的 "not found" 原样给用户看。
+  useEffect(() => { api.xray(signature).then(setView).catch((e) => { const message = String(e.message ?? e); setError(/not found|404/i.test(message) ? '借贷市场里没有这笔交易的记录' : message); }); }, [signature]);
   useEffect(() => { const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onClose]);
   const [copied, setCopied] = useState(false);
   const copy = () => navigator.clipboard?.writeText(signature).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500); }, () => {});

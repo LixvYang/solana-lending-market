@@ -1,6 +1,5 @@
-/**
- * 代币的展示信息:名称、说明、图标。链上没有这些(测试币没有 Metaplex 元数据),所以放在前端,按符号查。
- * 图标是内联 SVG,不依赖外部图片;测试币在右下角加一个角标,和真 SOL 一眼区分开。
+/** INPUT: API/组件传入的 token symbol。 OUTPUT: 代币名称、说明、内联 SVG 图标与价格来源角标。
+ * POSITION: 前端按符号登记展示信息;测试币不依赖链上 Metaplex 元数据。 SYNC: 新银行符号要补齐此表和图标。
  */
 export interface TokenMeta { symbol: string; name: string; description: string; badge?: { text: string; color: string } }
 
@@ -8,6 +7,12 @@ const TOKENS: Record<string, TokenMeta> = {
   SOL: { symbol: 'SOL', name: 'Solana', description: 'Solana 原生代币,用来付手续费和账户租金。兑换台按 Pyth SOL/USD 实时价计价。' },
   pSOL: { symbol: 'pSOL', name: 'Pyth 定价测试 SOL', badge: { text: 'P', color: '#7c4dff' },
     description: '价格跟随 Pyth devnet 的 SOL/USD 实时行情(约 1–2 分钟更新一次),用来演示真实预言机。' },
+  pBTC: { symbol: 'pBTC', name: 'Pyth 定价测试 BTC', badge: { text: 'P', color: '#7c4dff' },
+    description: '测试用 BTC,价格跟随 Pyth devnet 的 BTC/USD 实时行情;不是可兑换或提取的真实比特币。' },
+  pETH: { symbol: 'pETH', name: 'Pyth 定价测试 ETH', badge: { text: 'P', color: '#7c4dff' },
+    description: '测试用 ETH,价格跟随 Pyth devnet 的 ETH/USD 实时行情;不是可兑换或提取的真实以太币。' },
+  tHYPE: { symbol: 'tHYPE', name: '固定价格测试 HYPE', badge: { text: 't', color: '#eb6834' },
+    description: '测试用 HYPE,价格由我们固定为 $80,后台程序定时写上链;仅用于 devnet 借贷演示。' },
   tSOL: { symbol: 'tSOL', name: '测试 SOL(mock 价)', badge: { text: 't', color: '#eb6834' },
     description: '剧本里的抵押品。价格由我们写进 Switchboard 布局的 mock 账户,可以随时调低来演示清算。' },
   tUSDC: { symbol: 'tUSDC', name: '测试 USDC', badge: { text: 't', color: '#eb6834' },
@@ -26,6 +31,18 @@ function Base({ symbol, id }: { symbol: string; id: string }) {
     <circle cx="16" cy="16" r="10.5" fill="none" stroke="#fff" strokeWidth="1.6" strokeDasharray="12 4.5" transform="rotate(-30 16 16)" />
     <text x="16" y="21" textAnchor="middle" fontSize="14" fontWeight="700" fill="#fff" fontFamily="system-ui, sans-serif">$</text>
   </>);
+  if (symbol === 'pBTC') return <>
+    <circle cx="16" cy="16" r="16" fill="#f7931a" />
+    <text x="16" y="22" textAnchor="middle" fontSize="19" fontWeight="700" fill="#fff" fontFamily="system-ui, sans-serif">₿</text>
+  </>;
+  if (symbol === 'pETH') return <>
+    <circle cx="16" cy="16" r="16" fill="#627eea" />
+    <path d="M16 5 8.8 16.2 16 20.4l7.2-4.2L16 5Zm0 17.2-7.2-4.3L16 28l7.2-10.1L16 22.2Z" fill="#fff" />
+  </>;
+  if (symbol === 'tHYPE') return <>
+    <circle cx="16" cy="16" r="16" fill="#24252b" />
+    <path d="M10 8h3.4v6.2h5.2V8H22v16h-3.4v-6.5h-5.2V24H10V8Z" fill="#fff" />
+  </>;
   const bg = symbol === 'SOL' ? '#111014' : symbol === 'pSOL' ? `url(#${id}-p)` : '#2b2540';
   return (<>
     <defs>

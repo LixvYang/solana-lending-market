@@ -1,7 +1,8 @@
 import type { BuildRequest, BuildResponse, FaucetResponse, SendResponse, SwapQuoteRequest, SwapQuoteResponse, SwapRatesView, WalletView } from '@contract';
+import { apiUrl } from '../api';
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await fetch(apiUrl(url), init);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const e = (body as { error?: string | { message?: string } }).error;

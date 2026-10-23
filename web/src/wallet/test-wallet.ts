@@ -22,6 +22,7 @@ export class TestWalletAdapter extends BaseMessageSignerWalletAdapter {
   get connecting() { return false; }
 
   async connect() {
+    // 历史项目名参与地址派生，改动会指向链上不存在的测试钱包。
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`solana-lending-indexer/testwallet/${this.seed}`));
     this.keypair = Keypair.fromSeed(new Uint8Array(digest));
     this._publicKey = this.keypair.publicKey;

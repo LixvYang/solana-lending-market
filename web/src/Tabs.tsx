@@ -1,10 +1,29 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
-export type TabId = 'pool' | 'wallet' | 'swap' | 'accounts' | 'activity';
-export const TAB_IDS: TabId[] = ['pool', 'wallet', 'swap', 'accounts', 'activity'];
+export type TabId = 'pool' | 'wallet' | 'swap' | 'accounts';
+export const TAB_IDS: TabId[] = ['pool', 'wallet', 'swap', 'accounts'];
+
+export type MarketAction = 'deposit' | 'borrow' | 'repay' | 'withdraw';
+export function parseMarketHash(hash: string): { symbol: string; action: MarketAction | null } | null {
+  const match = /^market\/([^/]+)(?:\/(deposit|borrow|repay|withdraw))?$/.exec(hash);
+  if (!match) return null;
+  try { return { symbol: decodeURIComponent(match[1]), action: (match[2] as MarketAction | undefined) ?? null }; } catch { return null; }
+}
+
+export const marketFromHash = (): string | null => {
+  return parseMarketHash(location.hash.slice(1))?.symbol ?? null;
+};
+
+export const marketActionFromHash = (): MarketAction | null => {
+  return parseMarketHash(location.hash.slice(1))?.action ?? null;
+};
+
+// 旧链接(D-018 录制清单、分享出去的地址)里的 #activity 现在并入"链上数据"tab。
+const ALIASES: Record<string, TabId> = { activity: 'accounts' };
 
 const fromHash = (): TabId => {
-  const id = location.hash.slice(1) as TabId;
+  const raw = location.hash.slice(1);
+  const id = marketFromHash() ? 'pool' : ALIASES[raw] ?? raw as TabId;
   return TAB_IDS.includes(id) ? id : 'pool';
 };
 
@@ -21,6 +40,21 @@ export function useTab() {
   }, []);
   const go = useCallback((id: TabId) => { if (location.hash.slice(1) !== id) location.hash = id; setTab(id); }, []);
   return [tab, go] as const;
+}
+
+export function useMarketSymbol() {
+  const [symbol, setSymbol] = useState(marketFromHash);
+  useEffect(() => {
+    const onHash = () => setSymbol(marketFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return symbol;
+}
+
+export function goMarket(symbol: string, action?: MarketAction) {
+  const hash = `market/${encodeURIComponent(symbol)}${action ? `/${action}` : ''}`;
+  if (location.hash.slice(1) !== hash) location.hash = hash;
 }
 
 export interface TabDef { id: TabId; label: string; badge?: ReactNode }

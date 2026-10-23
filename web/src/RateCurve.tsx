@@ -12,7 +12,7 @@ function niceScale(max: number) {
 }
 
 /** 手写 SVG 折线图：2px 线、≥8px 圆点带 2px 底色环、发丝网格、悬停十字线 + 单个 tooltip。 */
-export function RateCurve({ curve }: { curve: RateCurveView }) {
+export function RateCurve({ curve, optimalUtilization }: { curve: RateCurveView; optimalUtilization?: number }) {
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<RatePoint | null>(null);
   const { top: yMax, ticks: yTicks } = niceScale(Math.max(...curve.points.map((p) => Math.max(p.borrowing_apr, p.lending_apr)), 0.01));
@@ -45,6 +45,7 @@ export function RateCurve({ curve }: { curve: RateCurveView }) {
           <line className="axis" x1={M.l} x2={W - M.r} y1={y(0)} y2={y(0)} />
           <path d={line((p) => p.borrowing_apr)} fill="none" stroke="var(--s1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           <path d={line((p) => p.lending_apr)} fill="none" stroke="var(--s2)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {optimalUtilization != null && <g className="optimal-marker"><line x1={x(optimalUtilization)} x2={x(optimalUtilization)} y1={M.t} y2={y(0)} stroke="var(--warning)" strokeWidth={1.5} strokeDasharray="4 3" /><text x={x(optimalUtilization)} y={M.t + 12} textAnchor="middle">最优</text></g>}
           {/* 当前利用率的标记；悬停时十字线接管 */}
           <line x1={x(active.utilization)} x2={x(active.utilization)} y1={M.t} y2={y(0)} stroke="var(--ink-3)" strokeWidth={1} />
           <circle cx={x(active.utilization)} cy={y(active.borrowing_apr)} r={5} fill="var(--s1)" stroke="var(--surface)" strokeWidth={2} />

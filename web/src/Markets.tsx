@@ -1,19 +1,17 @@
-import type { BankView, PoolView, WalletAction } from '@contract';
-import { fmtPct, fmtToken, fmtUsd, short } from './format';
+import type { PoolView } from '@contract';
+import { fmtPct, fmtToken, fmtUsd } from './format';
 import { SourceChip, TokenName } from './tokens';
+import { goMarket } from './Tabs';
 
 /**
  * 市场列表,版式参照常见借贷前端(Aave / marginfi / Kamino):一行一个资产,存款与借款并排,
- * 每行带"存入 / 借出"直达操作。点行选中,下方显示这个资产的利率曲线与参数。
- * 窄屏时每行变成一张卡片(CSS 用 data-label 显示列名)。
+ * 每行带"存入 / 借出"直达资产详情。窄屏时每行变成一张卡片(CSS 用 data-label 显示列名)。
  */
-export function Markets({ pool, selected, onSelect, onAct }: {
-  pool: PoolView; selected: string | null; onSelect: (bank: string) => void; onAct: (bank: string, action: WalletAction) => void;
-}) {
-  const act = (b: BankView, action: WalletAction) => (e: React.MouseEvent) => { e.stopPropagation(); onAct(b.address, action); };
+export function Markets({ pool }: { pool: PoolView }) {
+  const open = (symbol: string, action?: 'deposit' | 'borrow') => () => goMarket(symbol, action);
   return (
     <div className="card flush">
-      <div className="card-head"><h2>市场<small>group {short(pool.group)} · 状态快照 slot {pool.as_of_slot ?? '—'}</small></h2></div>
+      <div className="card-head"><h2>全部资产<small>{pool.banks.length} 个</small></h2></div>
       <div className="tablewrap"><table className="markets">
         <thead><tr>
           <th>资产</th><th className="n">价格</th><th className="n">总存款</th><th className="n">存款 APR</th>
@@ -23,8 +21,8 @@ export function Markets({ pool, selected, onSelect, onAct }: {
           {pool.banks.map((b) => {
             const liquidity = (BigInt(b.total_deposits) - BigInt(b.total_borrows)).toString();
             return (
-              <tr key={b.address} className={`pick ${selected === b.address ? 'sel' : ''}`} onClick={() => onSelect(b.address)}
-                  tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSelect(b.address)} aria-selected={selected === b.address}>
+              <tr key={b.address} className="pick" onClick={open(b.label)}
+                  tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open(b.label)()}>
                 <td data-label="资产"><TokenName symbol={b.label} /></td>
                 <td className="n" data-label="价格"><div>{fmtUsd(b.price)}</div><SourceChip source={b.oracle_source} /></td>
                 <td className="n" data-label="总存款"><div>{fmtToken(b.total_deposits, b.decimals, 2)}</div><div className="muted">{fmtUsd(b.total_deposits_usd)}</div></td>
@@ -38,8 +36,8 @@ export function Markets({ pool, selected, onSelect, onAct }: {
                 </td>
                 <td className="n" data-label="最高抵押率">{fmtPct(b.weights.asset_init, 0)}</td>
                 <td className="actions">
-                  <button className="btn primary sm" onClick={act(b, 'deposit')}>存入</button>
-                  <button className="btn sm" onClick={act(b, 'borrow')}>借出</button>
+                  <button className="btn primary sm" onClick={(e) => { e.stopPropagation(); open(b.label, 'deposit')(); }}>存入</button>
+                  <button className="btn sm" onClick={(e) => { e.stopPropagation(); open(b.label, 'borrow')(); }}>借出</button>
                 </td>
               </tr>
             );

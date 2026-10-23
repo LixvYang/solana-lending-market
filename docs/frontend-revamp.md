@@ -568,7 +568,7 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
    - 程序错误已有 `name`(`RiskEngineInitRejected` 等),前端按 `name` 翻译，`message` 作兜底。
    - `wallet-history` 的 `result: '成功'|'失败'` 改为语言无关的值(`'success' | 'failed' | 其他状态原值`),前端翻译;同步 `src/api/types.ts`、`web/src/mock.ts` 与测试。
    - 兑换报价的 `summary` 中文句子：前端改用已有字段自行拼出，不再显示 `summary`(字段可保留)。
-6. 范围：仅 `web/src` 界面文字(含 `aria-label`、`title`、占位符、空状态、提示、图例、表头、toast)。`<title>` 两种语言都用 "Lending Market / 借贷市场" 不需要切换——改为随语言切换。教程与 `docs/` 不翻译。代码注释保持中文。
+6. 范围：仅 `web/src` 界面文字(含 `aria-label`、`title`、占位符、空状态、提示、图例、表头、toast)。页面 `<title>` 随语言切换("借贷市场" / "Lending Market")。教程与 `docs/` 不翻译。代码注释保持中文。
 7. 中文文案逐字保持现状(不借机改词)。
 
 **英文术语表(必须遵守):**

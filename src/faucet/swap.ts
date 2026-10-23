@@ -9,6 +9,7 @@ import type { WalletRpc, WaitClock } from '../api/wallet-rpc';
 import { realClock } from '../api/wallet-rpc';
 import type { OracleSource, SendResponse, SwapAsset, SwapQuoteResponse, SwapRatesView } from '../api/types';
 import { nativeAmount } from './config';
+import type { DeskLeg } from '../store/desk-events';
 
 export interface SwapAssetConfig {
   symbol: SwapAsset;
@@ -45,9 +46,11 @@ const ui = (native: bigint, decimals: number) => {
   return `${native / base}${fraction ? `.${fraction}` : ''}`;
 };
 
-export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, clock: WaitClock = realClock) {
+export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, clock: WaitClock = realClock,
+  record?: (signature: string, wallet: string, from: DeskLeg, to: DeskLeg) => Promise<void>) {
   const allowed = new Set([ComputeBudgetProgram.programId, SystemProgram.programId, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID].map(p => p.toBase58()));
   const keep = config.keepLamports ?? 50_000_000n; // 兑换台至少留 0.05 SOL
+  const quoted = new Map<string, { wallet: string; from: DeskLeg; to: DeskLeg }>();
   const priced = async (a: SwapAssetConfig): Promise<PricedAsset> => {
     const { usdMicro } = await (config.price.fresh ?? config.price)(a);
     if (usdMicro <= 0n) throw new ApiError(503, `${a.symbol} 价格暂时不可用，请稍后再试。`);
@@ -99,6 +102,10 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
       const block = await rpc.getLatestBlockhash('confirmed');
       const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: block.blockhash, instructions }).compileToV0Message());
       tx.sign([desk]);
+      const message = tx.message.serialize().toString('base64');
+      quoted.set(message, { wallet: wallet.toBase58(), from: { symbol: from.symbol, amount: String(amountIn), decimals: from.decimals },
+        to: { symbol: to.symbol, amount: String(out), decimals: to.decimals } });
+      if (quoted.size > 200) quoted.delete(quoted.keys().next().value!);
       // #endregion
       return { transaction: Buffer.from(tx.serialize()).toString('base64'), last_valid_block_height: block.lastValidBlockHeight,
         from: from.symbol, to: to.symbol, in_amount: String(amountIn), in_decimals: from.decimals, out_amount: String(out), out_decimals: to.decimals,
@@ -109,7 +116,12 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
     async submit(input: unknown): Promise<SendResponse> {
       const { bytes, signature } = guardTransaction(input,
         (used, signers) => signers.includes(desk.publicKey.toBase58()) && used.every(p => allowed.has(p)), 'not a swap transaction');
-      return submitSigned(bytes, signature, rpc, clock);
+      const tx = VersionedTransaction.deserialize(bytes), intent = quoted.get(tx.message.serialize().toString('base64'));
+      const result = await submitSigned(bytes, signature, rpc, clock);
+      if (result.status === 'confirmed' && record && intent) try { await record(signature, intent.wallet, intent.from, intent.to); }
+      catch { console.error('desk history write failed'); }
+      if (intent) quoted.delete(tx.message.serialize().toString('base64'));
+      return result;
     },
   };
 }

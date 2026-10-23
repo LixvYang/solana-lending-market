@@ -1,3 +1,4 @@
+import { useId } from 'react';
 /** INPUT: API/组件传入的 token symbol。 OUTPUT: 代币名称、说明、内联 SVG 图标与价格来源角标。
  * POSITION: 前端按符号登记展示信息;测试币不依赖链上 Metaplex 元数据。 SYNC: 新银行符号要补齐此表和图标。
  */
@@ -56,7 +57,9 @@ function Base({ symbol, id }: { symbol: string; id: string }) {
 
 /** 代币图标。size 为像素;角标标明"测试币"。 */
 export function TokenIcon({ symbol, size = 24 }: { symbol: string; size?: number }) {
-  const meta = tokenMeta(symbol), id = `tk-${symbol}-${size}`;
+  // 渐变 id 必须每个实例唯一：曾按"符号 + 尺寸"命名，同页重复时若第一个在隐藏的 tab 里(display:none),
+  // Chrome 会让其他图标引用到的渐变失效——pSOL 的圆底整个消失，只剩角标。
+  const meta = tokenMeta(symbol), id = `tk-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const known = symbol in TOKENS;
   return (
     <svg className="token-icon" width={size} height={size} viewBox="-1 -1 36 36" role="img" aria-label={symbol}>

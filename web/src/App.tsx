@@ -33,14 +33,18 @@ export function App() {
   const [syncExpired, setSyncExpired] = useState(false);
   // 用户刚发完交易时加速轮询 45 秒(1.5 秒一次),这样页面几秒内就能反映出来;平时 5 秒一次。
   const [fast, setFast] = useState(false);
-  const boost = useCallback(() => { setFast(true); window.setTimeout(() => setFast(false), 45_000); }, []);
+  const [historyReload, setHistoryReload] = useState(0);
+  const boost = useCallback(() => { setHistoryReload((n) => n + 1); setFast(true); window.setTimeout(() => setFast(false), 45_000); }, []);
   const every = fast ? 1500 : 5000;
   // 三份数据都在后台轮询(不管在哪个 tab):tab 上的计数与"可清算"提醒要实时,切 tab 也不必等加载。
   const pool = usePoll(api.pool, [every], every);
   const accounts = usePoll(api.accounts, [every], every);
   const activity = usePoll(() => api.activity(), [every], every);
   useEffect(() => {
-    if (pendingSync && activity.data?.items.some((item) => item.signature === pendingSync.signature)) setPendingSync(null);
+    if (pendingSync && activity.data?.items.some((item) => item.signature === pendingSync.signature)) {
+      setPendingSync(null);
+      setHistoryReload((n) => n + 1);
+    }
   }, [pendingSync, activity.data]);
   useEffect(() => {
     if (!pendingSync) return;
@@ -105,7 +109,7 @@ export function App() {
             {accounts.data ? <Accounts accounts={accounts.data} pool={pool.data} /> : <div className="card muted">正在读取清算监控…</div>}
           </TabPanel>
           <TabPanel id="wallet" active={tab}>
-            <WalletPanel banks={pool.data.banks} accounts={accounts.data ?? []} accountsReady={accounts.data !== null} onTransaction={boost} onGoSwap={goSwap} wallet={wallet ?? null} syncStatus={syncStatus} />
+            <WalletPanel banks={pool.data.banks} accounts={accounts.data ?? []} accountsReady={accounts.data !== null} onTransaction={boost} onGoSwap={goSwap} wallet={wallet ?? null} syncStatus={syncStatus} historyReload={historyReload} onOpenTx={setTx} />
           </TabPanel>
           <TabPanel id="swap" active={tab}>
             <SwapPage faucetUrl={config?.faucet_url ?? null} onDone={boost} wallet={wallet} onResult={reportSwap} active={tab === 'swap'} />

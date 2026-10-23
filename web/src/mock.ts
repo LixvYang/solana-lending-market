@@ -3,7 +3,7 @@
  * 数值取自真实剧本的结束状态；`?mock=liquidation` 改成"清算前一刻的 Bob"，用来看可清算状态的样子。
  * 不属于产品代码，生产构建不会引入它(只在 import.meta.env.DEV 下动态加载)。
  */
-import type { AccountView, ActivityItem, BankHistoryView, BankView, LiquidationItem, PoolView, RateCurveView, RatePoint } from '@contract';
+import type { AccountView, ActivityItem, BankHistoryView, BankView, LiquidationItem, PoolView, RateCurveView, RatePoint, WalletHistoryItem } from '@contract';
 import run from '../../fixtures/m1-run.json';
 import xray from './mock-xray.json';
 import devnet from '../../program/devnet.json';
@@ -76,6 +76,11 @@ export function installMock() {
   let submitted: { action: string; bank: string; amount: string } | null = null;
   let pendingItem: ActivityItem | null = null;
   const mockSignature = '5mockSignature1111111111111111111111111111111111111111111111111111111111111111111111';
+  const history: WalletHistoryItem[] = [
+    { time: new Date().toISOString(), kind: 'swap', assets: [{ symbol: 'SOL', amount: '10000000', decimals: 9 }, { symbol: 'tUSDC', amount: '1500000', decimals: 6 }], result: 'confirmed', signature: mockSignature, detail: false },
+    { time: new Date(Date.now() - 3600000).toISOString(), kind: 'faucet', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }, { symbol: 'tSOL', amount: '10000000000', decimals: 9 }], result: 'confirmed', signature: mockSignature, detail: false },
+    { time: new Date(Date.now() - 7200000).toISOString(), kind: 'deposit', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }], result: '成功', signature: run.steps.find((s) => s.label.includes('bob') && s.label.includes('deposit'))?.signatures[0] ?? mockSignature, detail: true },
+  ];
   const swapAssets = [
     { symbol: 'SOL', decimals: 9, usd: '150', source: 'pyth' },
     { symbol: 'tSOL', decimals: 9, usd: '100', source: 'mock' },
@@ -110,6 +115,11 @@ export function installMock() {
     if (url.pathname === '/faucet') return ok({ signatures: [], granted: [], next_allowed_at: new Date().toISOString() });
     if (!url.pathname.startsWith('/api/')) return real(input, init);
     if (url.pathname === '/api/config') return ok({ faucet_url: 'http://localhost:8788/faucet' });
+    if (/^\/api\/wallet\/[^/]+\/history$/.test(url.pathname)) {
+      const before = url.searchParams.get('before');
+      const wallet = decodeURIComponent(url.pathname.split('/')[3]);
+      return ok(wallet === a.actors.bob && !before ? { items: history, next_before: null } : { items: [], next_before: null });
+    }
     if (url.pathname === '/api/pool') return ok(pool);
     if (url.pathname === '/api/accounts') return ok(accounts);
     if (url.pathname === '/api/activity') {

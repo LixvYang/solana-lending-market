@@ -47,9 +47,22 @@ test('faucet transfers exact default grants with idempotent destination ATAs, ne
   assert.equal((await faucetRoute('POST', '/faucet', { wallet: wallet.toBase58() }, 'ip2', grant)).status, 429);
   assert.equal((await faucetRoute('POST', '/faucet', { wallet: '?' }, 'ip', grant)).status, 400);
 });
+test('confirmed faucet records grants, and history write failure does not change the confirmed response', async () => {
+  const payer = Keypair.generate(), wallet = Keypair.generate().publicKey.toBase58();
+  const grants = [{ label: 'tUSDC', mint: new PublicKey(a.mints.tUSDC), amount: 1000n, decimals: 6 }];
+  const rpc = fakeRpc({ getAccountInfo: async () => tokenInfo(grants[0].mint, payer.publicKey, 10_000n),
+    sendRawTransaction: async () => 'unused', getSignatureStatuses: async () => ({ context: { slot: 1 }, value: [{ slot: 20, confirmations: 1, err: null, confirmationStatus: 'confirmed' }] }) });
+  let recorded: unknown[] = [];
+  const handler = createFaucet(payer, rpc, grants, 2000, fakeClock(), async (...args) => { recorded = args; });
+  const response = await handler({ wallet }, 'ip');
+  assert.equal(recorded[0], response.signatures[0]); assert.equal(recorded[1], wallet);
+  assert.deepEqual(recorded[2], [{ symbol: 'tUSDC', amount: '1000', decimals: 6 }]);
+  const broken = createFaucet(payer, rpc, grants, 2000, fakeClock(), async () => { throw Error('db unavailable'); });
+  assert.equal((await broken({ wallet: Keypair.generate().publicKey.toBase58() }, 'ip')).signatures.length, 1);
+});
 test('faucet insufficient balance 503 and limit next_allowed_at, CORS and safe RPC failure', async () => {
   const payer = Keypair.generate(), wallet = Keypair.generate().publicKey.toBase58();
-  const grants = [{ label: 'tUSDC', mint: new PublicKey(a.mints.tUSDC), amount: 1000n }];
+  const grants = [{ label: 'tUSDC', mint: new PublicKey(a.mints.tUSDC), amount: 1000n, decimals: 6 }];
   const handler = createFaucet(payer, fakeRpc({ getAccountInfo: async () => null }), grants, 2000, fakeClock());
   const unavailable = await faucetRoute('POST', '/faucet', { wallet }, 'ip', handler); assert.equal(unavailable.status, 503); assert.match(unavailable.body, /余额不足/);
   const limit = await faucetRoute('POST', '/faucet', { wallet }, 'ip', handler); assert.equal(limit.status, 429); assert.ok(JSON.parse(limit.body).next_allowed_at);
@@ -60,7 +73,7 @@ test('faucet insufficient balance 503 and limit next_allowed_at, CORS and safe R
 });
 test('setup instructions use admin SOL transfer and mint authority; amount/config exact parsing', () => {
   const admin = Keypair.generate().publicKey, faucet = Keypair.generate().publicKey;
-  const grants = [{ label: 'tUSDC', mint: new PublicKey(a.mints.tUSDC), amount: 2000000000000n }];
+  const grants = [{ label: 'tUSDC', mint: new PublicKey(a.mints.tUSDC), amount: 2000000000000n, decimals: 6 }];
   const instructions = setupInstructions(admin, faucet, 2000000000n, grants);
   const sol = SystemInstruction.decodeTransfer(instructions[0]); assert.equal(sol.lamports, 2000000000n); assert.ok(sol.fromPubkey.equals(admin)); assert.ok(sol.toPubkey.equals(faucet));
   const mint = decodeMintToInstruction(instructions[2]); assert.equal(mint.data.amount, grants[0].amount); assert.ok(mint.keys.authority.pubkey.equals(admin));

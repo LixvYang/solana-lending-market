@@ -1,5 +1,5 @@
 /** INPUT: API fetch 与共享 JSON 契约。 OUTPUT: 前端只读/钱包接口调用。 POSITION: Web 数据访问边界。 SYNC: 同步 web/src/market/folder.md。 */
-import type { AccountView, ActivityPage, BankHistoryView, ClientConfig, LiquidationItem, PoolView, RateCurveView, XrayView } from '@contract';
+import type { AccountView, ActivityPage, BankHistoryView, ClientConfig, LiquidationItem, PoolView, RateCurveView, WalletHistoryPage, XrayView } from '@contract';
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(apiUrl(path));
@@ -27,5 +27,6 @@ export const api = {
   accounts: () => get<AccountView[]>('/api/accounts'),
   activity: (before?: string, bank?: string, limit = 20) => get<ActivityPage>(`/api/activity?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}${bank ? `&bank=${encodeURIComponent(bank)}` : ''}`),
   liquidations: (bank?: string) => get<LiquidationItem[]>(`/api/liquidations${bank ? `?bank=${encodeURIComponent(bank)}` : ''}`),
+  walletHistory: (wallet: string, before?: string) => get<WalletHistoryPage>(`/api/wallet/${encodeURIComponent(wallet)}/history${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   xray: (signature: string) => get<XrayView>(`/api/tx/${signature}`),
 };

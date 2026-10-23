@@ -266,6 +266,13 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .portfolio-lists .card { min-width: 0; }
 .portfolio-lists .asset-list li { min-width: 0; }
 .portfolio-lists .asset-list .n { min-width: 56px; }
+.wallet-history-list { display: grid; }
+.wallet-history-row { display: grid; grid-template-columns: 90px 72px minmax(0, 1fr) 52px auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 0; border-top: 0.5px solid var(--slate-6); font-size: 14px; }
+.wallet-history-row time { font-size: 12px; white-space: nowrap; }
+.wallet-history-assets { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.wallet-history-assets > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wallet-history-row > span:nth-last-child(2) { color: var(--good); }
+@media (max-width: 640px) { .wallet-history-row { grid-template-columns: 1fr auto; gap: 6px 10px; } .wallet-history-row time { grid-column: 1; } .wallet-history-row > b { grid-column: 1; } .wallet-history-assets { grid-column: 1 / -1; } .wallet-history-row > span:nth-last-child(2) { grid-column: 1; } }
 @media (max-width: 640px) {
   .portfolio-lists { grid-template-columns: minmax(0, 1fr); }
   .wallet-hint { align-items: flex-start; }

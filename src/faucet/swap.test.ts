@@ -157,6 +157,21 @@ test('转发守卫:用户签完的兑换交易(含 SOL 收款方向)放行;不�
   await assert.rejects(swap.submit({ transaction: Buffer.from(withOtherProgram.serialize()).toString('base64') }), /not a swap transaction/);
 });
 
+test('确认兑换按报价记录钱包、卖出/买入数量;记录失败不改变已确认状态', async () => {
+  const records: unknown[][] = [];
+  const swap = createSwap(desk, stocked(), config, fakeClock(), async (...args) => { records.push(args); });
+  const quote = await swap.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  const signed = VersionedTransaction.deserialize(Buffer.from(quote.transaction, 'base64')); signed.sign([user]);
+  const sent = await swap.submit({ transaction: Buffer.from(signed.serialize()).toString('base64') });
+  assert.equal(sent.status, 'confirmed'); assert.deepEqual(records[0], [sent.signature, user.publicKey.toBase58(),
+    { symbol: 'SOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '25000000', decimals: 6 }]);
+
+  const broken = createSwap(desk, stocked(), config, fakeClock(), async () => { throw Error('db unavailable'); });
+  const second = await broken.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  const secondTx = VersionedTransaction.deserialize(Buffer.from(second.transaction, 'base64')); secondTx.sign([user]);
+  assert.equal((await broken.submit({ transaction: Buffer.from(secondTx.serialize()).toString('base64') })).status, 'confirmed');
+});
+
 test('HTTP 路由:只有配置了兑换台才有 /swap/*,否则 404', async () => {
   const noGrant = async () => { throw new Error('unused'); };
   assert.equal((await faucetRoute('GET', '/swap/rates', undefined, '1.1.1.1', noGrant as never)).status, 404);

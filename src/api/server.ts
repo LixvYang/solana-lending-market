@@ -11,6 +11,7 @@ import { buildTransaction, PriceStale } from './builder';
 import { sendTransaction } from './send';
 import { getWallet } from './wallet';
 import { indexConfirmed } from './confirmed';
+import { getWalletHistory } from './wallet-history';
 import type { ClientConfig } from './types';
 import type { WalletServices } from './wallet-rpc';
 export function portNumber(value: string | undefined): number {
@@ -43,6 +44,16 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
     }
     if (method === 'OPTIONS')
       return { status: 204, headers, body: '' };
+    let body: unknown;
+    const history = /^\/api\/wallet\/([^/]+)\/history$/.exec(url.pathname);
+    if (method === 'GET' && history) {
+      let wallet: string;
+      try { wallet = decodeURIComponent(history[1]); } catch { throw new ApiError(400, 'invalid public key'); }
+      const key = address(wallet, 32), rawLimit = url.searchParams.get('limit');
+      if (rawLimit !== null && !/^\d+$/.test(rawLimit)) throw new ApiError(400, 'invalid limit');
+      body = await getWalletHistory(db, key, { before: url.searchParams.get('before') ?? undefined, limit: rawLimit === null ? undefined : Number(rawLimit) });
+      return { status: 200, headers, body: toJson(body) };
+    }
     const walletRoute = method === 'POST' && ['/api/build', '/api/send'].includes(url.pathname) || method === 'GET' && /^\/api\/wallet\/[^/]+$/.test(url.pathname);
     if (walletRoute) {
       if (!services) throw new ApiError(503, 'wallet RPC unavailable');
@@ -60,7 +71,6 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
     }
     if (method !== 'GET')
       throw new ApiError(404, 'not found');
-    let body: unknown;
     switch (url.pathname) {
       case '/healthz':
       case '/api/healthz':

@@ -7,11 +7,13 @@ import { goMarket } from '../Tabs';
 import { portfolioSummary } from '../portfolio';
 import { previewRisk } from '../risk';
 import { WalletButton } from './WalletButton';
+import { WalletHistory } from './WalletHistory';
 
 const minimum = (a: string, b: string) => BigInt(a) < BigInt(b) ? a : b;
 
-export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onGoSwap, wallet, syncStatus }: {
+export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onGoSwap, wallet, syncStatus, historyReload, onOpenTx }: {
   banks: BankView[]; accounts: AccountView[]; accountsReady: boolean; onTransaction: () => void; onGoSwap: () => void; wallet: WalletView | null; syncStatus?: string | null;
+  historyReload: number; onOpenTx: (signature: string) => void;
 }) {
   const { publicKey, connected } = useWallet();
   const address = publicKey?.toBase58() ?? null;
@@ -96,6 +98,7 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
           </li>;
         })}</ul>}</section>
       </div>
+      {address && <WalletHistory wallet={address} reload={historyReload} onOpenTx={onOpenTx} />}
     </>}
   </div>;
 }

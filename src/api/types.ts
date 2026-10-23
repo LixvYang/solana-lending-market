@@ -154,6 +154,18 @@ export interface ActivityPage {
   next_before: string | null;
 }
 
+export type WalletHistoryKind = 'deposit' | 'borrow' | 'repay' | 'withdraw' | 'liquidated' | 'liquidator' | 'swap' | 'faucet';
+export interface WalletHistoryLeg { symbol: string; amount: string; decimals: number }
+export interface WalletHistoryItem {
+  time: string | null;
+  kind: WalletHistoryKind;
+  assets: WalletHistoryLeg[];
+  result: string;
+  signature: string;
+  detail: boolean;
+}
+export interface WalletHistoryPage { items: WalletHistoryItem[]; next_before: string | null }
+
 /** GET /api/liquidations:清算事件里的原生单位 f64 差值与健康度。 */
 export interface LiquidationItem {
   signature: string;

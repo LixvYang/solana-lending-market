@@ -30,4 +30,5 @@ async function main() {
     console.log(`${symbol}: ${current ? '更新' : '创建'} ${pda.toBase58()} → ${await sendInstructions(rpc, admin, [ix])}`);
   }
 }
-void main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+// web3.js Connection 的 websocket 会让进程挂着不退出(D-024 同一问题),跑完显式退出。
+void main().then(() => process.exit(0), error => { console.error(error instanceof Error ? error.message : error); process.exit(1); });

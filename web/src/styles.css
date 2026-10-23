@@ -350,7 +350,11 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
   .brand { gap: 8px; }
   .logo { width: 30px; height: 30px; }
   .wallet-adapter-button { padding: 0 10px !important; }
+  h1 { font-size: 20px; }
+  /* 英文产品名加钱包按钮在 390px 宽放不下(会换行或互相压住);窄屏页头只留图标与 Devnet 标记，名字留给读屏。 */
+  .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
+.top h1, .top-actions .btn, .wallet-adapter-button { white-space: nowrap; }
 
 /* 提示条里的领取按钮不需要水龙头卡片自带的底色和内边距(否则是框中框)。 */
 .wallet-hint .faucet { display: inline-flex; margin: 0; padding: 0; background: none; }

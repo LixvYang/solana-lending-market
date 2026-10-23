@@ -5,15 +5,17 @@ import { CartesianGrid, Line, LineChart, Legend, ResponsiveContainer, Tooltip, X
 import type { BankHistoryPoint, BankHistoryView } from '@contract';
 import { fmtPct, fmtTime, fmtToken, fmtUsd } from '../format';
 import { resampleSteps } from './resample';
+import { useT } from '../i18n';
 
 type Mode = 'utilization' | 'apr' | 'total';
 type ChartPoint = BankHistoryPoint & { time: number };
-const LABELS: Record<Mode, string> = { utilization: '利用率', apr: 'APR', total: '总量' };
-const SERIES = {
-  utilization: [{ key: 'utilization', name: '利用率', color: 'var(--chart-borrow)' }],
-  apr: [{ key: 'borrowing_apr', name: '借款 APR', color: 'var(--chart-borrow)' }, { key: 'lending_apr', name: '存款 APR', color: 'var(--chart-deposit)' }],
-  total: [{ key: 'total_deposits_usd', name: '总存款', color: 'var(--chart-deposit)' }, { key: 'total_borrows_usd', name: '总借款', color: 'var(--chart-borrow)' }],
-} as const;
+function seriesFor(t: ReturnType<typeof useT>['t']) {
+  return {
+    utilization: [{ key: 'utilization', name: t.utilization, color: 'var(--chart-borrow)' }],
+    apr: [{ key: 'borrowing_apr', name: t.borrowApr, color: 'var(--chart-borrow)' }, { key: 'lending_apr', name: t.supplyApr, color: 'var(--chart-deposit)' }],
+    total: [{ key: 'total_deposits_usd', name: t.totalSupplied, color: 'var(--chart-deposit)' }, { key: 'total_borrows_usd', name: t.totalBorrowed, color: 'var(--chart-borrow)' }],
+  } as const;
+}
 const compactUsd = (value: number) => value >= 1e6 ? `$${+(value / 1e6).toFixed(1)}M` : value >= 1e3 ? `$${+(value / 1e3).toFixed(1)}K` : `$${+value.toFixed(2)}`;
 const chartTime = (time: number) => {
   const date = new Date(time);
@@ -32,28 +34,35 @@ function niceTop(value: number, cap: number) {
 }
 
 function HistoryTooltip({ active, payload, decimals, symbol, mode, hasTimes }: { active?: boolean; payload?: { payload?: ChartPoint }[]; decimals: number; symbol: string; mode: Mode; hasTimes: boolean }) {
+  const { t } = useT();
+  const SERIES = seriesFor(t);
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
-  const rows: [string, number | null, string][] = mode === 'utilization' ? [['利用率', point.utilization, fmtPct(point.utilization, 2)]]
-    : mode === 'apr' ? [['借款 APR', point.borrowing_apr, fmtPct(point.borrowing_apr, 2)], ['存款 APR', point.lending_apr, fmtPct(point.lending_apr, 2)]]
-      : [['总存款', point.total_deposits_usd, `${fmtToken(point.total_deposits, decimals, 4)} ${symbol} / ${fmtUsd(point.total_deposits_usd)}`], ['总借款', point.total_borrows_usd, `${fmtToken(point.total_borrows, decimals, 4)} ${symbol} / ${fmtUsd(point.total_borrows_usd)}`]];
+  const rows: [string, number | null, string][] = mode === 'utilization' ? [[t.utilization, point.utilization, fmtPct(point.utilization, 2)]]
+    : mode === 'apr' ? [[t.borrowApr, point.borrowing_apr, fmtPct(point.borrowing_apr, 2)], [t.supplyApr, point.lending_apr, fmtPct(point.lending_apr, 2)]]
+      : [[t.totalSupplied, point.total_deposits_usd, `${fmtToken(point.total_deposits, decimals, 4)} ${symbol} / ${fmtUsd(point.total_deposits_usd)}`], [t.totalBorrowed, point.total_borrows_usd, `${fmtToken(point.total_borrows, decimals, 4)} ${symbol} / ${fmtUsd(point.total_borrows_usd)}`]];
   return <div className="tip">{hasTimes ? <div className="muted">{fullTime(point.time)}</div> : <div className="muted">slot {point.slot}</div>}
     {rows.map(([name, _value, display], index) => <div className="row" key={name}><i className="key" style={{ background: SERIES[mode][index]?.color ?? 'var(--chart-borrow)' }} /><b>{display}</b><span>{name}</span></div>)}
   </div>;
 }
 
 function DataTable({ points, mode, decimals, symbol }: { points: ChartPoint[]; mode: Mode; decimals: number; symbol: string }) {
+  const { t, locale } = useT();
+  const SERIES = seriesFor(t);
   const rows: { time: ReactNode; values: ReactNode[] }[] = points.map((point) => ({
-    time: point.block_time ? fmtTime(point.block_time) : `slot ${point.slot}`,
+    time: point.block_time ? fmtTime(point.block_time, locale) : `slot ${point.slot}`,
     values: mode === 'utilization' ? [fmtPct(point.utilization, 2)]
       : mode === 'apr' ? [fmtPct(point.borrowing_apr, 2), fmtPct(point.lending_apr, 2)]
         : [`${fmtToken(point.total_deposits, decimals, 4)} ${symbol} (${fmtUsd(point.total_deposits_usd)})`, `${fmtToken(point.total_borrows, decimals, 4)} ${symbol} (${fmtUsd(point.total_borrows_usd)})`],
   }));
-  return <details className="data"><summary>查看数据表</summary><div className="tablewrap"><table><thead><tr><th>时间</th>{SERIES[mode].map((item) => <th className="n" key={item.key}>{item.name}</th>)}</tr></thead>
+  return <details className="data"><summary>{t.showDataTable}</summary><div className="tablewrap"><table><thead><tr><th>{t.time}</th>{SERIES[mode].map((item) => <th className="n" key={item.key}>{item.name}</th>)}</tr></thead>
     <tbody>{rows.map((row, index) => <tr key={points[index].slot}><td>{row.time}</td>{row.values.map((value, i) => <td className="n" key={i}>{value}</td>)}</tr>)}</tbody></table></div></details>;
 }
 
 export function BankHistory({ history, decimals, symbol }: { history: BankHistoryView; decimals: number; symbol: string }) {
+  const { t, locale } = useT();
+  const LABELS: Record<Mode, string> = { utilization: t.utilization, apr: 'APR', total: t.total };
+  const SERIES = seriesFor(t);
   const [mode, setMode] = useState<Mode>('utilization');
   const points: ChartPoint[] = history.points.map((point) => ({ ...point, time: pointTime(point) }));
   const series = SERIES[mode];
@@ -64,11 +73,11 @@ export function BankHistory({ history, decimals, symbol }: { history: BankHistor
   const formatX = (value: number) => hasTimes ? chartTime(value) : `slot ${value}`;
   // 只有真实时间轴才补点;slot 回退时没有"现在"对应的 slot。
   const chartPoints = hasTimes ? resampleSteps(points, Date.now(), 240) : points;
-  return <section className="card bank-history"><h2>历史曲线</h2>
-    <div className="seg" role="group" aria-label="历史曲线指标">{(Object.keys(LABELS) as Mode[]).map((key) => <button key={key} className={mode === key ? 'on' : ''} aria-pressed={mode === key} onClick={() => setMode(key)}>{LABELS[key]}</button>)}</div>
-    {!points.length ? <p className="muted">还没有银行状态历史。</p>
-      : points.length === 1 ? <p className="muted">目前只有 1 个状态记录（slot {points[0].slot}{points[0].block_time ? `，${fmtTime(points[0].block_time)}` : ''}），后续状态变化后会形成曲线。</p>
-        : mode === 'total' && values.length === 0 ? <p className="muted">这些历史时刻没有可用的价格快照，暂时无法显示美元总量。</p>
+  return <section className="card bank-history"><h2>{t.history}</h2>
+    <div className="seg" role="group" aria-label={t.historyMetrics}>{(Object.keys(LABELS) as Mode[]).map((key) => <button key={key} className={mode === key ? 'on' : ''} aria-pressed={mode === key} onClick={() => setMode(key)}>{LABELS[key]}</button>)}</div>
+    {!points.length ? <p className="muted">{t.noHistory}</p>
+      : points.length === 1 ? <p className="muted">{t.oneHistoryPoint(points[0].slot, points[0].block_time ? fmtTime(points[0].block_time, locale) : '')}</p>
+        : mode === 'total' && values.length === 0 ? <p className="muted">{t.noPriceHistory}</p>
           : <div className="history-plot chart"><ResponsiveContainer width="100%" height={230}>
             <LineChart data={chartPoints} margin={{ top: 12, right: 16, bottom: 8, left: 8 }}>
               <CartesianGrid vertical={false} stroke="var(--slate-6)" />

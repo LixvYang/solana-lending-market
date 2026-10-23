@@ -11,7 +11,7 @@ export interface RiskMetrics {
 }
 
 export interface RiskAction { action: WalletAction; bank: string; amount: string }
-export interface RiskPreview { before: RiskMetrics; after: RiskMetrics; maxBorrow: string | null; liquidationPrice: number | null; blocked: string | null }
+export interface RiskPreview { before: RiskMetrics; after: RiskMetrics; maxBorrow: string | null; liquidationPrice: number | null; blocked: 'BORROW_LIMIT_EXCEEDED' | null }
 
 type Position = { deposit: bigint; borrow: bigint };
 const zero = (): Position => ({ deposit: 0n, borrow: 0n });
@@ -115,5 +115,5 @@ export function previewRisk(banks: BankView[], balances: BalanceView[], action: 
   // 程序只在 borrow/withdraw 后检查开仓健康度;存款和还款不检查——资不抵债的账户正需要靠它们补救，不能拦。
   const checked = action.action === 'borrow' || action.action === 'withdraw';
   const initHealth = !checked || after.weightedAssetsInitUsd == null || after.weightedLiabilitiesInitUsd == null ? null : after.weightedAssetsInitUsd - after.weightedLiabilitiesInitUsd;
-  return { before, after, maxBorrow: maxBorrow(beforePositions, byAddress, target), liquidationPrice: liquidationPrice(afterPositions, byAddress, after), blocked: initHealth != null && initHealth < 0 ? '超过可借额度' : null };
+  return { before, after, maxBorrow: maxBorrow(beforePositions, byAddress, target), liquidationPrice: liquidationPrice(afterPositions, byAddress, after), blocked: initHealth != null && initHealth < 0 ? 'BORROW_LIMIT_EXCEEDED' : null };
 }

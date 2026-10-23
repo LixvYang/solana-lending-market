@@ -128,7 +128,7 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
   catch (error) {
     // 驱动异常可包含带凭据的 URL；只返回固定消息，不记录异常对象或请求 URL。
     return { status: error instanceof ApiError ? error.status : 500, headers,
-      body: toJson({ error: error instanceof PriceStale ? error.view : error instanceof ApiError ? error.message : 'internal server error' }) };
+      body: toJson({ error: error instanceof ApiError ? error.message : '服务器暂时不可用，请稍后重试。', code: error instanceof ApiError ? error.code : 'INTERNAL_ERROR', ...(error instanceof ApiError && error.params ? { params: error.params } : {}) }) };
   }
 }
 export async function handle(db: Db, req: IncomingMessage, res: ServerResponse, services?: WalletServices): Promise<void> {
@@ -137,7 +137,7 @@ export async function handle(db: Db, req: IncomingMessage, res: ServerResponse, 
     const input = req.method === 'POST' ? await readJson(req) : undefined;
     result = await route(db, req.method ?? 'GET', req.url ?? '/', input, services);
   } catch (error) {
-    result = { status: error instanceof ApiError ? error.status : 500, headers: corsHeaders, body: toJson({ error: error instanceof ApiError ? error.message : 'internal server error' }) };
+    result = { status: error instanceof ApiError ? error.status : 500, headers: corsHeaders, body: toJson({ error: error instanceof ApiError ? error.message : '服务器暂时不可用，请稍后重试。', code: error instanceof ApiError ? error.code : 'INTERNAL_ERROR', ...(error instanceof ApiError && error.params ? { params: error.params } : {}) }) };
   }
   for (const [key, value] of Object.entries(result.headers))
     res.setHeader(key, value);

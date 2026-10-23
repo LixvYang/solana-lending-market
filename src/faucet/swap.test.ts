@@ -97,7 +97,7 @@ test('报价的边界:同一资产、未知资产、太小、太大、非法数�
     ['tUSDC', 'SOL', '0.01'], ['tUSDC', 'SOL', '101'], ['SOL', 'tUSDC', '0'], ['SOL', 'tUSDC', 'abc'], ['SOL', 'tUSDC', '-1']])
     await assert.rejects(swap.quote({ wallet, from, to, amount }), (e: unknown) => status(e) === 400, `${from}→${to} ${amount}`);
   await assert.rejects(swap.quote({ wallet: 'not-a-key', from: 'SOL', to: 'tSOL', amount: '0.1' }), (e: unknown) => status(e) === 400);
-  await assert.rejects(swapWith(stocked(1n)).quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503);    // 代币不足
+  await assert.rejects(swapWith(stocked(1n)).quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503 && (e as { code?: string }).code === 'DESK_INSUFFICIENT');    // 代币不足
   // SOL 不足:要付出 0.5 SOL,兑换台有 0.52 SOL,但必须保留 0.05(付 ATA 租金等),可用只有 0.47 → 拒绝;
   // 有 0.56 SOL 时可用 0.51 → 放行。正好卡在"保留金额"这条规则上,去掉保留就会放行前一种。
   await assert.rejects(swapWith(stocked(10n ** 15n, 520_000_000)).quote({ wallet, from: 'tUSDC', to: 'SOL', amount: '25' }), (e: unknown) => status(e) === 503);

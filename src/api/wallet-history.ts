@@ -79,7 +79,7 @@ export async function getWalletHistory(db: Db, wallet: string, options: { before
         { symbol: labels[String(data.liability_bank)] ?? String(data.liability_bank), amount: String(Math.round(Number(data.pre_balances?.liquidatee_liability_balance ?? 0) - Number(data.post_balances?.liquidatee_liability_balance ?? 0))), decimals: decimals[String(data.liability_bank)] ?? 0 },
       ] : amount == null ? [] : [{ symbol, amount: String(amount), decimals: decimals[bank] ?? 0 }];
     rows.push({ cursor: { time: time ?? new Date(0).toISOString(), signature: String(row.signature), ix: Number(row.ix_index), source: 'loan' },
-      item: { time, kind, assets, result: row.err == null ? '成功' : '失败', signature: String(row.signature), detail: true } });
+      item: { time, kind, assets, result: row.err == null ? 'success' : 'failed', signature: String(row.signature), detail: true } });
   }
   for (const row of desk.rows) {
     const time = iso(row.time), kind = String(row.kind) as 'swap' | 'faucet';
@@ -89,7 +89,7 @@ export async function getWalletHistory(db: Db, wallet: string, options: { before
         { symbol: String(row.to_symbol), amount: String(row.to_amount), decimals: Number(row.to_decimals ?? 0) }]
       : details;
     rows.push({ cursor: { time: time ?? new Date(0).toISOString(), signature: String(row.signature), ix: -1, source: 'desk' },
-      item: { time, kind, assets, result: row.status === 'confirmed' ? '成功' : String(row.status), signature: String(row.signature), detail: false } });
+      item: { time, kind, assets, result: row.status === 'confirmed' ? 'success' : String(row.status), signature: String(row.signature), detail: false } });
   }
   rows.sort((a, b) => compare(a.cursor, b.cursor));
   const page = rows.slice(0, limit), last = page.at(-1);

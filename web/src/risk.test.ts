@@ -38,7 +38,7 @@ test('borrowing lowers percentage health and reports remaining opening capacity'
 
 test('borrowing beyond opening health is blocked', () => {
   const result = previewRisk([collateral, debt], [balance(collateral, '2', '0')], { action: 'borrow', bank: debt.address, amount: '100' });
-  assert.equal(result.blocked, '超过可借额度');
+  assert.equal(result.blocked, 'BORROW_LIMIT_EXCEEDED');
 });
 
 test('single collateral reports the maintenance liquidation price', () => {
@@ -63,7 +63,7 @@ test('deposits and repays are never blocked, even for an underwater account', ()
   for (const action of ['deposit', 'repay'] as const) {
     assert.equal(previewRisk([collateral, debt], underwater, { action, bank: debt.address, amount: '1' }).blocked, null);
   }
-  assert.equal(previewRisk([collateral, debt], underwater, { action: 'withdraw', bank: collateral.address, amount: '1' }).blocked, '超过可借额度');
+  assert.equal(previewRisk([collateral, debt], underwater, { action: 'withdraw', bank: collateral.address, amount: '1' }).blocked, 'BORROW_LIMIT_EXCEEDED');
 });
 
 test('repaying the full debt returns to the no-debt state', () => {
@@ -112,7 +112,7 @@ test('有价格区间时按程序的保守价计算：资产取下沿、债务�
   assert.ok(Math.abs(result.before.weightedLiabilitiesInitUsd! - 792) < 1e-9);
   assert.equal(result.maxBorrow, '0');
   // 按中间价(800 − 792 = 8)本会以为还能借 7;现在借 7 必须被拦下
-  assert.equal(previewRisk([pyth, usd], balances, { action: 'borrow', bank: usd.address, amount: '7' }).blocked, '超过可借额度');
+  assert.equal(previewRisk([pyth, usd], balances, { action: 'borrow', bank: usd.address, amount: '7' }).blocked, 'BORROW_LIMIT_EXCEEDED');
   // 维持口径:资产 10×99×0.9 = 891,债务 720×1×1.05 = 756
   assert.ok(Math.abs(result.before.healthPercent! - (891 - 756) / 891 * 100) < 1e-12);
 });

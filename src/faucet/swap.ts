@@ -77,7 +77,7 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
   const keep = config.keepLamports ?? 50_000_000n; // 兑换台至少留 0.05 SOL
   const priced = async (a: SwapAssetConfig): Promise<PricedAsset> => {
     const { usdMicro } = await (config.price.fresh ?? config.price)(a);
-    if (usdMicro <= 0n) throw new ApiError(503, `${a.symbol} 价格暂时不可用，请稍后再试。`);
+    if (usdMicro <= 0n) throw new ApiError(503, `${a.symbol} 价格暂时不可用，请稍后再试。`, 'PRICE_UNAVAILABLE', { symbol: a.symbol });
     return { ...a, usdMicro };
   };
   const asset = (symbol: unknown) => {
@@ -110,7 +110,7 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
       if (value < config.minUsdMicro || value > config.maxUsdMicro) throw new ApiError(400, `swap value must be between $${ui(config.minUsdMicro, 6)} and $${ui(config.maxUsdMicro, 6)}`);
       const out = swapOut(amountIn, from, to);
       if (out < 1n) throw new ApiError(400, 'amount too small');
-      if (await deskHolds(to) < out) throw new ApiError(503, `兑换台的 ${to.symbol} 不足，请换小一点的数量或稍后再试。`);
+      if (await deskHolds(to) < out) throw new ApiError(503, `兑换台的 ${to.symbol} 不足，请换小一点的数量或稍后再试。`, 'DESK_INSUFFICIENT', { symbol: to.symbol });
 
       // #region ep8-swap-tx
       // 一笔交易里两件事:用户把 from 转给兑换台 + 兑换台把 to 转给用户。付手续费和 ATA 租金的是用户(payerKey = wallet)，

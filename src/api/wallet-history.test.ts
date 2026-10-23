@@ -19,7 +19,9 @@ test('wallet history merges desk records, paginates, and isolates records by wal
     // 兑换两侧要带上各自的小数位(曾因 SQL 漏选 from_decimals/to_decimals,0.005 SOL 显示成 5,000,000 SOL)。
     const swap = all.items.find(row => row.kind === 'swap')!;
     assert.deepEqual(swap.assets.map(leg => leg.decimals), [9, 9]);
+    assert.equal(swap.result, 'success');
     assert.ok(all.items.some(row => row.kind === 'liquidated'), 'victim sees their liquidation');
+    assert.equal(all.items.find(row => row.kind === 'liquidated')?.result, 'success');
     const liquidator = await getWalletHistory(db, a.actors.carol, { limit: 100 });
     assert.ok(liquidator.items.some(row => row.kind === 'liquidator'), 'liquidator sees their action');
     assert.ok(!all.items.some(row => row.signature === `${signature}2`), 'another wallet desk row is private');

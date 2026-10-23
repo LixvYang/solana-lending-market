@@ -22,7 +22,7 @@ export async function faucetRoute(method: string, url: string, input: unknown, i
 }
 function faucetFailure(error: unknown) {
   return { status: error instanceof ApiError ? error.status : 503, headers: corsHeaders,
-    body: JSON.stringify({ error: error instanceof ApiError ? error.message : 'faucet unavailable',
+    body: JSON.stringify({ error: error instanceof ApiError ? error.message : '水龙头服务暂时不可用，请稍后重试。', code: error instanceof ApiError ? error.code : 'INTERNAL_ERROR', ...(error instanceof ApiError && error.params ? { params: error.params } : {}),
       ...(error instanceof FaucetLimit ? { next_allowed_at: error.next_allowed_at } : {}) }) };
 }
 export async function handleFaucet(req: IncomingMessage, res: ServerResponse, grant: FaucetHandler, swap?: Swap, checkDb?: () => Promise<void>) {

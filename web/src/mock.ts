@@ -79,7 +79,7 @@ export function installMock() {
   const history: WalletHistoryItem[] = [
     { time: new Date().toISOString(), kind: 'swap', assets: [{ symbol: 'SOL', amount: '10000000', decimals: 9 }, { symbol: 'tUSDC', amount: '1500000', decimals: 6 }], result: 'confirmed', signature: mockSignature, detail: false },
     { time: new Date(Date.now() - 3600000).toISOString(), kind: 'faucet', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }, { symbol: 'tSOL', amount: '10000000000', decimals: 9 }], result: 'confirmed', signature: mockSignature, detail: false },
-    { time: new Date(Date.now() - 7200000).toISOString(), kind: 'deposit', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }], result: '成功', signature: run.steps.find((s) => s.label.includes('bob') && s.label.includes('deposit'))?.signatures[0] ?? mockSignature, detail: true },
+    { time: new Date(Date.now() - 7200000).toISOString(), kind: 'deposit', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }], result: 'success', signature: run.steps.find((s) => s.label.includes('bob') && s.label.includes('deposit'))?.signatures[0] ?? mockSignature, detail: true },
   ];
   const swapAssets = [
     { symbol: 'SOL', decimals: 9, usd: '150', source: 'pyth' },

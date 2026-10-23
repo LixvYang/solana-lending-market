@@ -162,7 +162,7 @@ export interface WalletHistoryItem {
   time: string | null;
   kind: WalletHistoryKind;
   assets: WalletHistoryLeg[];
-  result: string;
+  result: 'success' | 'failed' | (string & {});
   signature: string;
   detail: boolean;
 }

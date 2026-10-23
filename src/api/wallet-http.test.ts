@@ -52,7 +52,7 @@ test('HTTP POST build/send 200/400/404/413/503, invalid JSON, chunk limit, 409 s
     for (const path of ['/api/build', '/api/send']) assert.equal((await route(db, 'POST', path, request)).status, 503);
     assert.equal((await route(db, 'GET', `/api/wallet/${a.actors.bob}`)).status, 503); assert.equal((await route(db, 'GET', '/api/pool')).status, 200);
     const stale = await http(db, JSON.stringify({ ...request, action: 'borrow' }), 'application/json', '/api/build', services({ getAccountInfo: async () => ({ ...feedInfo(1), owner: PublicKey.default }) })); // 价格账户不归允许的预言机程序:无法刷新
-    assert.equal(stale.status, 409); assert.equal(JSON.parse(stale.body).error.name, 'PriceStale');
+    assert.equal(stale.status, 409); assert.equal(JSON.parse(stale.body).code, 'PRICE_UNAVAILABLE'); assert.match(JSON.parse(stale.body).error, /价格/);
     const preflight = await route(db, 'OPTIONS', '/api/build'); assert.equal(preflight.status, 204); assert.match(preflight.headers['Access-Control-Allow-Methods'], /POST/); assert.match(preflight.headers['Access-Control-Allow-Headers'], /Content-Type/);
     const failure = await http(db, JSON.stringify(request), 'application/json', '/api/build', services({ getLatestBlockhash: async () => { throw Error('RPC_URL api-key=secret PRIVATE_KEY=abc'); } }));
     assert.equal(failure.status, 500); assert.ok(!/RPC_URL|api-key|secret|PRIVATE_KEY/.test(failure.body));

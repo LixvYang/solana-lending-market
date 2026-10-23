@@ -279,6 +279,8 @@ export interface SendResponse {
   status: 'confirmed' | 'failed' | 'timeout';
   error: ProgramErrorView | null;
   slot: string | null;
+  /** 成功交易已同步到活动表与最新账户快照。 */
+  indexed: boolean;
 }
 
 export interface WalletTokenView {

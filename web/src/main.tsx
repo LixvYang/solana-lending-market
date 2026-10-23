@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { Providers } from './wallet/Providers';
+import './radix-colors.css';
 import './styles.css';
 
 (globalThis as { Buffer?: typeof Buffer }).Buffer = Buffer;

@@ -42,7 +42,10 @@ test('HTTP POST build/send 200/400/404/413/503, invalid JSON, chunk limit, 409 s
   const db = await seedApi(); try {
     const request = { action: 'deposit', wallet: a.actors.bob, bank: a.banks.tUSDC, amount: '1000000000' };
     const response = await http(db, JSON.stringify(request)); assert.equal(response.status, 200); const tx = builtTx(JSON.parse(response.body).transaction); tx.sign([deriveKeypair('bob')]);
-    assert.equal((await http(db, JSON.stringify({ transaction: Buffer.from(tx.serialize()).toString('base64') }), 'application/json', '/api/send')).status, 200);
+    const sent = await http(db, JSON.stringify({ transaction: Buffer.from(tx.serialize()).toString('base64') }), 'application/json', '/api/send');
+    assert.equal(sent.status, 200);
+    assert.equal(JSON.parse(sent.body).status, 'confirmed');
+    assert.equal(JSON.parse(sent.body).indexed, false);
     assert.equal((await http(db, 'invalid')).status, 400); assert.equal((await http(db, '{}', 'text/plain')).status, 400);
     assert.equal((await http(db, '{}')).status, 400); assert.equal((await http(db, '{}', 'application/json', '/missing')).status, 404);
     assert.equal((await http(db, Buffer.alloc(65537))).status, 413); assert.equal((await http(db, '{}', 'application/json', '/api/build', services(), '65537')).status, 413);

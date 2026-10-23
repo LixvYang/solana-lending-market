@@ -9,6 +9,7 @@ import xray from './mock-xray.json';
 import devnet from '../../program/devnet.json';
 import { PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { b64 } from './wallet/chain';
+import { toNative } from './format';
 
 const a = run.addresses;
 const curve = { optimal_utilization: 0.5, plateau_rate: 0.6, max_rate: 3, fee_rate: 0.06, fee_fixed_apr: 0.04 };
@@ -72,11 +73,43 @@ export function installMock() {
     liability_bank: a.banks.tUSDC, liability_label: 'tUSDC', seized_asset: 10_000_000_000, repaid_liability: 475_000_000,
     pre_health: -750.001780881723, post_health: -701.2517808817221 }] : [];
 
+  let submitted: { action: string; bank: string; amount: string } | null = null;
+  let pendingItem: ActivityItem | null = null;
+  const mockSignature = '5mockSignature1111111111111111111111111111111111111111111111111111111111111111111111';
+  const swapAssets = [
+    { symbol: 'SOL', decimals: 9, usd: '150', source: 'pyth' },
+    { symbol: 'tSOL', decimals: 9, usd: '100', source: 'mock' },
+    { symbol: 'tUSDC', decimals: 6, usd: '1', source: 'mock' },
+    { symbol: 'pSOL', decimals: 9, usd: '108', source: 'pyth' },
+    { symbol: 'pBTC', decimals: 8, usd: '84400', source: 'pyth' },
+    { symbol: 'pETH', decimals: 8, usd: '2500', source: 'pyth' },
+    { symbol: 'tHYPE', decimals: 8, usd: '80', source: 'mock' },
+  ] as const;
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.href);
     const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (url.pathname === '/swap/rates') return ok({ assets: swapAssets, min_usd: '0.1', max_usd: '10000' });
+    if (url.pathname === '/swap/quote') {
+      const req = JSON.parse(String(init?.body ?? '{}')) as { wallet: string; from: string; to: string; amount: string };
+      const from = swapAssets.find((item) => item.symbol === req.from)!;
+      const to = swapAssets.find((item) => item.symbol === req.to)!;
+      const inAmount = toNative(req.amount, from.decimals) ?? '0';
+      const fromUsd = BigInt(Math.round(Number(from.usd) * 1_000_000));
+      const toUsd = BigInt(Math.round(Number(to.usd) * 1_000_000));
+      const outAmount = BigInt(inAmount) * fromUsd * 10n ** BigInt(to.decimals) /
+        (toUsd * 10n ** BigInt(from.decimals));
+      const payer = new PublicKey(req.wallet);
+      const tx = new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: PublicKey.default.toBase58(),
+        instructions: [SystemProgram.transfer({ fromPubkey: payer, toPubkey: payer, lamports: 0 })] }).compileToV0Message());
+      return ok({ transaction: b64.encode(tx.serialize()), last_valid_block_height: 1, from: from.symbol, to: to.symbol,
+        in_amount: inAmount, in_decimals: from.decimals, out_amount: outAmount.toString(), out_decimals: to.decimals,
+        summary: `用 ${req.amount} ${from.symbol} 兑换` });
+    }
+    if (url.pathname === '/swap/send') return ok({ signature: mockSignature, status: 'confirmed', error: null, slot: '1', indexed: true });
+    if (url.pathname === '/faucet') return ok({ signatures: [], granted: [], next_allowed_at: new Date().toISOString() });
     if (!url.pathname.startsWith('/api/')) return real(input, init);
+    if (url.pathname === '/api/config') return ok({ faucet_url: 'http://localhost:8788/faucet' });
     if (url.pathname === '/api/pool') return ok(pool);
     if (url.pathname === '/api/accounts') return ok(accounts);
     if (url.pathname === '/api/activity') {
@@ -84,7 +117,7 @@ export function installMock() {
       const selected = banks.find((b) => b.address === bank);
       const filtered = bank ? items.filter((item) => item.bank === bank || item.instruction === 'lending_account_liquidate' && [a.banks.tSOL, a.banks.tUSDC].includes(bank))
         .map((item) => item.instruction === 'lending_account_liquidate' && selected ? { ...item, bank, bank_label: selected.label } : item) : items;
-      return ok({ items: filtered, next_before: null });
+      return ok({ items: pendingItem ? [pendingItem, ...filtered] : filtered, next_before: null });
     }
     if (url.pathname === '/api/liquidations') {
       const bank = url.searchParams.get('bank');
@@ -116,6 +149,7 @@ export function installMock() {
     if (url.pathname === '/api/build') {
       // 假交易：一笔 0 lamports 的自转账，只为让钱包有东西可签。
       const req = JSON.parse(String(init?.body ?? '{}'));
+      submitted = { action: req.action, bank: req.bank, amount: req.amount };
       const payer = new PublicKey(req.wallet);
       const tx = new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: PublicKey.default.toBase58(),
         instructions: [SystemProgram.transfer({ fromPubkey: payer, toPubkey: payer, lamports: 0 })] }).compileToV0Message());
@@ -125,7 +159,14 @@ export function installMock() {
         simulation: tooMuch ? { ok: false, logs: [], units_consumed: null, error: { code: 6010, name: 'RiskEngineInitRejected', message: '借款后健康度不足,请减少借款数量或先增加抵押' } }
           : { ok: true, logs: [], units_consumed: 62000, error: null } });
     }
-    if (url.pathname === '/api/send') return ok({ signature: '5mockSignature1111111111111111111111111111111111111111111111111111111111111111111111', status: 'confirmed', error: null, slot: '1' });
+    if (url.pathname === '/api/send') {
+      const signature = mockSignature;
+      const bank = banks.find((item) => item.address === submitted?.bank);
+      const action = submitted?.action ?? 'deposit';
+      pendingItem = { signature, slot: '1', block_time: new Date().toISOString(), ix_index: 0, instruction: `lending_account_${action}`,
+        event: null, account: a.marginfiAccounts.bob, account_label: 'bob', bank: bank?.address ?? null, bank_label: bank?.label ?? null, amount: submitted?.amount ?? null, ok: true };
+      return ok({ signature, status: 'confirmed', error: null, slot: '1', indexed: true });
+    }
     const sig = url.pathname.split('/').pop()!;
     const x = (xray as Record<string, unknown>)[sig] ?? Object.values(xray)[0];
     return ok(x);

@@ -12,4 +12,4 @@ COPY program/devnet.json ./program/devnet.json
 RUN pnpm install --frozen-lockfile
 
 ENV NODE_ENV=production
-CMD ["node", "--import", "tsx", "scripts/serve-api.ts"]
+CMD ["node", "--import", "tsx", "scripts/start.ts"]

@@ -13,5 +13,6 @@
 | fixed.test.ts | 测试 | 符号、48 位小数、超过 Number 精度与 i128 边界 |
 | rational.ts | 计算 | bigint 分数、f64 位模式/半 ULP、截断显示 |
 | rational.test.ts | 测试 | IEEE754 已知向量、次正规数、算术与显示 |
+| worker-health.ts | 运行时 | worker 成功轮次健康状态与可选 HTTP 探针 |
 
 SYNC: 增删文件或改变职责时更新此表与文件头部。

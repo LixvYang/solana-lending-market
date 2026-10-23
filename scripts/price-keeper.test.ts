@@ -7,6 +7,6 @@ test('keeper 缺少专用钱包时明确报错且不回退管理员钱包', () =
     encoding: 'utf8', env: { ...process.env, KEEPER_KEYPAIR: '', ANCHOR_WALLET: '/unused/admin.json', RPC_URL: '' },
   });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /缺少 KEEPER_KEYPAIR/);
+  assert.match(result.stderr, /missing KEEPER credentials/);
   assert.doesNotMatch(result.stderr, /ANCHOR_WALLET/);
 });

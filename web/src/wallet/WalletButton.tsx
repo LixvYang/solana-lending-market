@@ -17,6 +17,6 @@ export function WalletButton() {
   const { connected, connecting, publicKey } = useWallet();
   const text = connecting ? '连接中…' : connected && publicKey ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}` : '连接钱包';
   return <BaseWalletMultiButton labels={labels}>
-    <><svg className="wallet-button-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2" /><path d="M2.5 7.5h15M13 11h2" /></svg>{text}</>
+    <><svg className="wallet-button-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2" /><path d="M2.5 7.5h15M13 11h2" /></svg><span>{text}</span></>
   </BaseWalletMultiButton>;
 }

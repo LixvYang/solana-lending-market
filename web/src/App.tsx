@@ -12,31 +12,19 @@ import { Xray } from './Xray';
 import { TabBar, TabPanel, useMarketSymbol, useTab, type TabDef } from './Tabs';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletPanel } from './wallet/WalletPanel';
-import { short } from './format';
 import { AssetPage } from './market/AssetPage';
 import { WalletButton } from './wallet/WalletButton';
 import { explorer } from './wallet/chain';
 
-type Theme = 'auto' | 'light' | 'dark';
-const NEXT: Record<Theme, Theme> = { auto: 'light', light: 'dark', dark: 'auto' };
-
-function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => { try { return (localStorage.getItem('theme') as Theme) || 'auto'; } catch { return 'auto'; } });
-  useEffect(() => {
-    if (theme === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('theme', theme); } catch { /* 隐私模式下可能不可用，页面照常工作 */ }
-  }, [theme]);
-  return [theme, () => setTheme(NEXT[theme])] as const;
-}
-
 export function App() {
-  const [theme, cycle] = useTheme();
   const [tab, go] = useTab();
   const marketSymbol = useMarketSymbol();
   const { connected, publicKey } = useWallet();
   const address = publicKey?.toBase58() ?? null;
   const [tx, setTx] = useState<string | null>(null);
   const [result, setResult] = useState<SendResponse | null>(null);
+  const [pendingSync, setPendingSync] = useState<{ signature: string; startedAt: number } | null>(null);
+  const [syncExpired, setSyncExpired] = useState(false);
   // 用户刚发完交易时加速轮询 45 秒(1.5 秒一次),这样页面几秒内就能反映出来;平时 5 秒一次。
   const [fast, setFast] = useState(false);
   const boost = useCallback(() => { setFast(true); window.setTimeout(() => setFast(false), 45_000); }, []);
@@ -45,6 +33,20 @@ export function App() {
   const pool = usePoll(api.pool, [every], every);
   const accounts = usePoll(api.accounts, [every], every);
   const activity = usePoll(() => api.activity(), [every], every);
+  useEffect(() => {
+    if (pendingSync && activity.data?.items.some((item) => item.signature === pendingSync.signature)) setPendingSync(null);
+  }, [pendingSync, activity.data]);
+  useEffect(() => {
+    if (!pendingSync) return;
+    const delay = Math.max(0, pendingSync.startedAt + 60_000 - Date.now());
+    const timer = window.setTimeout(() => setSyncExpired(true), delay);
+    return () => window.clearTimeout(timer);
+  }, [pendingSync]);
+  const syncStatus = pendingSync ? syncExpired ? '数据稍后更新' : '同步中' : null;
+  const reportResult = useCallback((next: SendResponse) => {
+    setResult(next);
+    if (next.status === 'confirmed') { setPendingSync({ signature: next.signature, startedAt: Date.now() }); setSyncExpired(false); }
+  }, []);
   const selected = pool.data?.banks.find((b) => b.label === marketSymbol) ?? null;
   const curve = usePoll(() => (selected ? api.rateCurve(selected.address) : Promise.resolve(null)), [selected?.address]);
   const history = usePoll(() => (selected ? api.bankHistory(selected.address) : Promise.resolve(null)), [selected?.address], every);
@@ -74,24 +76,21 @@ export function App() {
     <div className="wrap">
       <header className="top">
         <div className="brand">
-          <svg className="logo" viewBox="0 0 32 32" aria-hidden><circle cx="16" cy="16" r="16" fill="var(--s1)" /><path d="M11 9.2h13l-3 3.3H8zM8 14.4h13l3 3.3H11zM11 19.6h13l-3 3.3H8z" fill="#fff" /></svg>
-          <div><h1>借贷市场 <span className="net">Devnet</span></h1>
-            <div className="sub">在 Solana devnet 上存款赚息、抵押借款{pool.updatedAt && <span className="muted"> · 更新于 {pool.updatedAt.toLocaleTimeString('zh-CN', { hour12: false })}</span>}</div></div>
+          <svg className="logo" viewBox="0 0 32 32" aria-hidden><circle cx="16" cy="16" r="16" fill="var(--s1)" /><path d="M11 9.2h13l-3 3.3H8zM8 14.4h13l3 3.3H11zM11 19.6h13l-3 3.3H8z" fill="white" /></svg>
+          <div><h1>借贷市场 <span className="net">Devnet</span></h1></div>
         </div>
         <div className="top-actions">
-          <button className="theme" onClick={cycle} aria-label={`切换主题，当前${theme === 'auto' ? '跟随系统' : theme === 'light' ? '浅色' : '深色'}`} title="切换主题">
-            {theme === 'auto' ? '◐ 跟随系统' : theme === 'light' ? '☀ 浅色' : '☾ 深色'}</button>
           <WalletButton />
         </div>
       </header>
       <TabBar tabs={tabs} active={tab} onChange={go} />
       {error && <div className="err"><b>暂时读不到数据</b>（{error}）。<div className="muted">本地开发时请确认 API 已启动：<span className="mono">pnpm exec tsx scripts/serve-api.ts</span>；页面会自动重试。</div></div>}
-      {!pool.data && !error && <div className="loading-state"><span className="spinner" aria-hidden />正在读取借贷池数据…</div>}
+      {!pool.data && !error && <div className="loading-state">正在读取借贷池数据…</div>}
       {pool.data && (
         <>
           <TabPanel id="pool" active={tab}>
             {marketSymbol
-              ? selected ? <AssetPage bank={selected} banks={pool.data.banks} mine={accounts.data?.find((a) => a.authority === address) ?? null} wallet={wallet ?? null} curve={curve.data} history={history.data} historyError={history.error} onTransaction={boost} onOpenTx={setTx} onResult={setResult} /> : <div className="card asset-not-found"><h2>找不到这个资产</h2><a href="#pool">← 返回市场</a></div>
+              ? selected ? <AssetPage bank={selected} banks={pool.data.banks} mine={accounts.data?.find((a) => a.authority === address) ?? null} wallet={wallet ?? null} curve={curve.data} history={history.data} historyError={history.error} onTransaction={boost} onOpenTx={setTx} onResult={reportResult} syncStatus={syncStatus} /> : <div className="card asset-not-found"><h2>找不到这个资产</h2><a href="#pool">← 返回市场</a></div>
               : <><Kpis pool={pool.data} /><div style={{ marginBottom: 16 }}><Markets pool={pool.data} /></div></>}
           </TabPanel>
           <TabPanel id="accounts" active={tab}>
@@ -99,7 +98,7 @@ export function App() {
             {accounts.data ? <Accounts accounts={accounts.data} pool={pool.data} /> : <div className="card muted">正在读取清算监控…</div>}
           </TabPanel>
           <TabPanel id="wallet" active={tab}>
-            <WalletPanel banks={pool.data.banks} accounts={accounts.data ?? []} accountsReady={accounts.data !== null} onTransaction={boost} onGoSwap={goSwap} wallet={wallet ?? null} />
+            <WalletPanel banks={pool.data.banks} accounts={accounts.data ?? []} accountsReady={accounts.data !== null} onTransaction={boost} onGoSwap={goSwap} wallet={wallet ?? null} syncStatus={syncStatus} />
           </TabPanel>
           <TabPanel id="swap" active={tab}>
             <SwapPage faucetUrl={config?.faucet_url ?? null} onDone={boost} wallet={wallet} onResult={setResult} active={tab === 'swap'} />
@@ -107,12 +106,12 @@ export function App() {
         </>
       )}
       <footer className="foot muted">
-        测试网演示，代币没有真实价值 · 基于 marginfi mrgn-0.1.0,程序 <span className="mono">{pool.data ? short(pool.data.program, 6) : '—'}</span> · 不是 marginfi 官方前端
+        测试网演示，代币没有真实价值。基于 marginfi mrgn-0.1.0。
       </footer>
       {result && <div className={`transaction-toast ${result.status === 'confirmed' ? 'ok' : 'bad'}`} role="status" aria-live="polite">
         <button className="transaction-toast-close" type="button" aria-label="关闭提示" onClick={() => setResult(null)}>×</button>
         <b>{result.status === 'confirmed' ? '交易已确认' : result.status === 'timeout' ? '确认超时，交易可能仍会上链' : `交易失败${result.error?.message ? `：${result.error.message}` : ''}`}</b>
-        <div className="transaction-toast-links"><a href={explorer(result.signature)} target="_blank" rel="noreferrer">在 Explorer 查看</a><button className="linkish" onClick={() => setTx(result.signature)}>交易拆解</button></div>
+        <div className="transaction-toast-links"><a href={explorer(result.signature)} target="_blank" rel="noreferrer">在 Explorer 查看</a><button className="linkish" onClick={() => setTx(result.signature)}>交易详情</button></div>
       </div>}
       {tx && <Xray signature={tx} onClose={close} />}
     </div>

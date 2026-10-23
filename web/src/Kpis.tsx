@@ -9,8 +9,7 @@ export function Kpis({ pool }: { pool: PoolView }) {
   const available = deposits_usd == null || borrows_usd == null ? null : deposits_usd - borrows_usd;
   return (
     <div className="grid kpis">
-      <div className="card"><div className="label">总存款</div><div className="hero">{fmtUsd(deposits_usd)}</div>
-        <div className="muted">{pool.banks.length} 个资产</div></div>
+      <div className="card"><div className="label">总存款</div><div className="hero">{fmtUsd(deposits_usd)}</div></div>
       <div className="card"><div className="label">总借款</div><div className="stat">{fmtUsd(borrows_usd)}</div></div>
       <div className="card"><div className="label">可借流动性</div><div className="stat">{fmtUsd(available)}</div></div>
       <div className="card">

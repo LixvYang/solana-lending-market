@@ -34,6 +34,7 @@ export function fakeRpc(overrides: Partial<WalletRpc> = {}): WalletRpc {
     getBalance: async () => 123456789,
     sendRawTransaction: async () => 'unused',
     getSignatureStatuses: async () => ({ context: { slot: 20 }, value: [{ slot: 20, confirmations: 1, err: null, confirmationStatus: 'confirmed' }] }),
+    getTransaction: async () => null,
     ...overrides,
   } as WalletRpc;
   // 批量读取委托给(可能被覆盖的)单个读取,测试只需要覆盖 getAccountInfo。

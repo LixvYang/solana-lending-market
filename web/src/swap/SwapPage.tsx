@@ -80,7 +80,7 @@ export function SwapPage({ faucetUrl, onDone, wallet: info, onResult, active }: 
   return (
     <div className="swap-wrap">
       <div className="swap card">
-        <div className="swap-title"><h2>兑换</h2><span className="muted">汇率每 30 秒更新 · 成交按报价锁定的数量</span></div>
+        <div className="swap-title"><h2>兑换</h2></div>
         <div className="swap-box">
           <div className="swap-row"><span className="label">卖出</span>
             {connected && <span className="muted">余额 {shown(from)}
@@ -99,7 +99,7 @@ export function SwapPage({ faucetUrl, onDone, wallet: info, onResult, active }: 
         {rate != null && (
           <dl className="swap-details">
             <div><dt>汇率</dt><dd><button className="linkish" onClick={() => setInvert(!invert)} type="button">1 {invert ? to : from} ≈ {Number(rate.toPrecision(6))} {invert ? from : to} ⇄</button></dd></div>
-            <div><dt>单价</dt><dd>{from} ${asset(from)?.usd} · {to} ${asset(to)?.usd}</dd></div>
+            <div><dt>单价</dt><dd>{from} ${asset(from)?.usd}，{to} ${asset(to)?.usd}</dd></div>
             <div><dt>滑点</dt><dd>无(数量在报价时锁定)</dd></div>
             <div><dt>网络费用</dt><dd>你付 ≈ 0.000005 SOL;首次收到某代币另付 {ATA_RENT_SOL} SOL 账户租金</dd></div>
             <div><dt>单笔限额</dt><dd>${rates!.min_usd} – ${rates!.max_usd}</dd></div>
@@ -107,7 +107,6 @@ export function SwapPage({ faucetUrl, onDone, wallet: info, onResult, active }: 
         <button className="btn primary block lg" onClick={exchange} disabled={Boolean(busy) || (connected && Boolean(problem))}>{label}</button>
         {note && <div className={`notice ${note.ok ? 'ok' : 'bad'}`}>{note.ok ? '✓ ' : ''}{note.text}</div>}
       </div>
-      <p className="muted swap-foot">测试币没有 AMM 池子,由兑换台按预言机价格原子成交:一笔交易里你转出、兑换台转入,要么都发生要么都不发生。</p>
     </div>
   );
 }

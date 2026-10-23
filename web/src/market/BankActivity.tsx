@@ -10,7 +10,7 @@ function compactTime(value: string | null) {
   const d = new Date(value);
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-function timeTitle(value: string | null, slot: string) { return `${value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '时间未知'} · slot ${slot}`; }
+function timeTitle(value: string | null, slot: string) { return `${value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '时间未知'}，slot ${slot}`; }
 function nativeFloat(value: number, decimals: number) {
   return (value / 10 ** decimals).toLocaleString('en-US', { maximumFractionDigits: 4 });
 }
@@ -33,7 +33,7 @@ function ActivityRows({ items, bank, onOpen }: { items: ActivityItem[]; bank: Ba
 function LiquidationRows({ rows, banks, onOpen }: { rows: LiquidationItem[]; banks: BankView[]; onOpen: (signature: string) => void }) {
   const byAddress = new Map(banks.map((b) => [b.address, b]));
   return <div className="tablewrap asset-tablewrap"><table className="activity asset-compact-table liquidation-table">
-    <thead><tr><th>时间</th><th>被清算账户</th><th>没收抵押</th><th>偿还债务</th><th title="加权资产 − 加权债务，小于 0 可清算">健康度(USD 差值) 前 → 后</th><th /></tr></thead>
+    <thead><tr><th>时间</th><th>被清算账户</th><th>没收抵押</th><th>偿还债务</th><th>健康度 (USD) 前 → 后</th><th /></tr></thead>
     <tbody>{rows.map((row) => {
       const asset = byAddress.get(row.asset_bank), liability = byAddress.get(row.liability_bank);
       return <tr key={`${row.signature}:${row.ix_index}`} className="pick" tabIndex={0}

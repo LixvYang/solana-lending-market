@@ -34,7 +34,7 @@ export function RateCurve({ curve, optimalUtilization }: { curve: RateCurveView;
       <div className="label" style={{ marginBottom: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <span><i className="key" style={{ background: 'var(--s1)' }} />借款 APR</span>
         <span><i className="key" style={{ background: 'var(--s2)' }} />存款 APR</span>
-        <span className="muted">当前利用率 {fmtPct(curve.current.utilization)} → 借款 {fmtPct(curve.current.borrowing_apr)} · 存款 {fmtPct(curve.current.lending_apr)}</span>
+        <span className="muted">当前利用率 {fmtPct(curve.current.utilization)} → 借款 {fmtPct(curve.current.borrowing_apr)}，存款 {fmtPct(curve.current.lending_apr)}</span>
       </div>
       <div style={{ position: 'relative' }}>
         <svg ref={ref} className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${curve.label} 利率曲线`}

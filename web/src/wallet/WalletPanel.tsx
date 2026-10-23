@@ -10,8 +10,8 @@ import { WalletButton } from './WalletButton';
 
 const minimum = (a: string, b: string) => BigInt(a) < BigInt(b) ? a : b;
 
-export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onGoSwap, wallet }: {
-  banks: BankView[]; accounts: AccountView[]; accountsReady: boolean; onTransaction: () => void; onGoSwap: () => void; wallet: WalletView | null;
+export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onGoSwap, wallet, syncStatus }: {
+  banks: BankView[]; accounts: AccountView[]; accountsReady: boolean; onTransaction: () => void; onGoSwap: () => void; wallet: WalletView | null; syncStatus?: string | null;
 }) {
   const { publicKey, connected } = useWallet();
   const address = publicKey?.toBase58() ?? null;
@@ -24,6 +24,7 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
   const hasDeposit = accountsReady && deposits.length > 0;
   const hasBorrow = accountsReady && debts.length > 0;
   const steps = [connected, sol != null && sol >= 0.01, hasTokens, hasDeposit, hasBorrow];
+  const currentStep = steps.findIndex((done) => !done);
   const showGuide = !connected || !hasBorrow;
   const borrowLimit = (bank: BankView) => {
     const liquidity = (BigInt(bank.total_deposits) - BigInt(bank.total_borrows)).toString();
@@ -44,45 +45,42 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
   });
 
   return <div className="portfolio">
+    {syncStatus && <div className="sync-status" role="status">{syncStatus}</div>}
     {showGuide && <section className="card onboarding">
-      <div className="section-heading"><div><h2>开始使用</h2><p className="muted">五步完成首次借贷，所有资产都在 Solana devnet 上。</p></div>
-        {!connected && <WalletButton />}</div>
+      <div className="section-heading"><div><h2>开始使用</h2></div></div>
       <ol className="onboarding-steps">{steps.map((done, index) => <li key={index} className={done ? 'done' : ''}>
         <span className="step-state" aria-label={done ? '已完成' : '未完成'}>{done ? '✓' : index + 1}</span>
         <div><b>{['连接 devnet 钱包', '领取 devnet SOL', '领取测试币', '存入抵押资产', '借出资产'][index]}</b>
-          <span>{[
-            done ? '钱包已连接' : '连接 Phantom 或 Solflare，并切换到 devnet。',
-            done ? `当前余额 ${sol?.toFixed(3)} SOL` : sol == null && connected ? '正在读取钱包余额…' : 'SOL 用于支付交易手续费。',
-            done ? '钱包里已有测试代币' : '免费领取本项目提供的测试代币。',
-            done ? '已有存款头寸' : !accountsReady ? '正在读取头寸…' : '选择有存款 APR 的资产作为抵押。',
-            done ? '已有借款头寸' : !accountsReady ? '正在读取头寸…' : '在可借额度内选择需要的资产。',
-          ][index]}</span>
-          {index === 1 && !done && <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">打开 Solana 水龙头 ↗</a>}
-          {index === 2 && !done && wallet?.faucet_url && address && <GetTokens address={address} faucetUrl={wallet.faucet_url} tokens={wallet.tokens} onDone={onTransaction} onGoSwap={onGoSwap} />}
-          {index === 3 && !done && banks[0] && <button className="linkish" onClick={() => goMarket(banks[0].label, 'deposit')}>去市场选择资产 →</button>}
-          {index === 4 && !done && borrowBank && <button className="linkish" onClick={() => goMarket(borrowBank.label, 'borrow')}>查看可借资产 →</button>}
+          {index === currentStep && index === 0 && <WalletButton />}
+          {index === currentStep && index === 1 && <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">领取 SOL ↗</a>}
+          {index === currentStep && index === 2 && wallet?.faucet_url && address && <GetTokens address={address} faucetUrl={wallet.faucet_url} tokens={wallet.tokens} onDone={onTransaction} />}
+          {index === currentStep && index === 3 && banks[0] && <button className="linkish" onClick={() => goMarket(banks[0].label, 'deposit')}>去存入资产 →</button>}
+          {index === currentStep && index === 4 && borrowBank && <button className="linkish" onClick={() => goMarket(borrowBank.label, 'borrow')}>去借出资产 →</button>}
         </div>
       </li>)}</ol>
     </section>}
 
     {connected && <>
-      <div className="grid kpis portfolio-kpis">
-        <div className="card"><div className="label">净资产</div><div className="hero">{fmtUsd(summary?.netAssetsUsd ?? null)}</div><div className="muted">marginfi 存款减去债务</div></div>
-        <div className="card"><div className="label">净 APY · 预估</div><div className="stat">{fmtPct(summary?.netApy ?? null, 2)}</div><div className="muted">按当前 APR 估算</div></div>
+      {deposits.length + debts.length > 0 && <div className="grid kpis portfolio-kpis">
+        <div className="card"><div className="label">净资产</div><div className="hero">{fmtUsd(summary?.netAssetsUsd ?? null)}</div></div>
+        <div className="card"><div className="label">净 APY</div><div className="stat">{fmtPct(summary?.netApy ?? null, 2)}</div></div>
         <div className="card"><div className="label">健康因子</div><div className={`stat ${summary?.healthFactor != null && summary.healthFactor < 1.1 ? 'bad-text' : summary?.healthFactor != null && summary.healthFactor < 1.5 ? 'risk-warn' : summary?.healthFactor != null || deposits.length ? 'good-text' : ''}`}>
-          {!accountsReady ? '读取中…' : summary?.healthFactor == null ? deposits.length && !debts.length ? '∞ · 无债务' : '—' : summary.healthFactor.toFixed(2)}</div><div className="muted">维持权重；小于 1 可清算</div></div>
+          {!accountsReady ? '读取中…' : summary?.healthFactor == null ? deposits.length && !debts.length ? '∞ 无债务' : '—' : summary.healthFactor.toFixed(2)}</div></div>
         <div className="card"><div className="label">已用借款额度</div><div className="stat">{fmtPct(summary?.borrowCapacityUsed ?? null)}</div>
           <div className={`meter ${(summary?.borrowCapacityUsed ?? 0) >= 1 ? 'crit' : (summary?.borrowCapacityUsed ?? 0) >= 0.75 ? 'warn' : ''}`}><i style={{ width: `${Math.max(0, Math.min(100, (summary?.borrowCapacityUsed ?? 0) * 100))}%` }} /></div></div>
-      </div>
+      </div>}
       <div className={`wallet-hint ${sol != null && sol < 0.01 ? 'low-sol' : ''}`}>
         <span>钱包 SOL <b>{sol == null ? '读取中…' : sol.toFixed(3)}</b></span>
         {sol != null && sol < 0.01 && <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">SOL 不足，去水龙头领取 ↗</a>}
-        {wallet?.faucet_url && address && <GetTokens address={address} faucetUrl={wallet.faucet_url} tokens={wallet.tokens} onDone={onTransaction} onGoSwap={onGoSwap} />}
+        {wallet?.faucet_url && address && <GetTokens address={address} faucetUrl={wallet.faucet_url} tokens={wallet.tokens} onDone={onTransaction} />}
         <button className="linkish" onClick={onGoSwap}>用 SOL 兑换</button>
       </div>
       <div className="grid portfolio-lists">
-        <section className="card"><h2>我的存款</h2>{deposits.length ? <ul className="asset-list">{positionRows(deposits, 'deposit')}</ul> : <p className="muted">还没有存款。</p>}</section>
-        <section className="card"><h2>我的借款</h2>{debts.length ? <ul className="asset-list">{positionRows(debts, 'borrow')}</ul> : <p className="muted">还没有借款。</p>}</section>
+        {/* 完全没有头寸时，引导条已经说明下一步;两张只写"还没有…"的卡片是重复信息，不显示。 */}
+        {(deposits.length > 0 || debts.length > 0) && <>
+          <section className="card"><h2>我的存款</h2>{deposits.length ? <ul className="asset-list">{positionRows(deposits, 'deposit')}</ul> : <p className="muted">还没有存款</p>}</section>
+          <section className="card"><h2>我的借款</h2>{debts.length ? <ul className="asset-list">{positionRows(debts, 'borrow')}</ul> : <p className="muted">还没有借款</p>}</section>
+        </>}
         <section className="card"><h2>可存资产</h2><ul className="asset-list">{banks.map((bank) => {
           const token = wallet?.tokens.find((item) => item.mint === bank.mint);
           return <li key={bank.address}><TokenName symbol={bank.label} size={28} sub={`${fmtPct(bank.lending_apr, 2)} 存款 APR`} />
@@ -90,13 +88,13 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
             <button className="btn sm" onClick={() => goMarket(bank.label, 'deposit')}>存入</button>
           </li>;
         })}</ul></section>
-        <section className="card"><h2>可借资产</h2><ul className="asset-list">{banks.map((bank) => {
+        <section className="card"><h2>可借资产</h2>{!deposits.length ? <p className="muted">存入抵押后可借款</p> : <ul className="asset-list">{banks.map((bank) => {
           const maximum = borrowLimit(bank);
           return <li key={bank.address}><TokenName symbol={bank.label} size={28} sub={`${fmtPct(bank.borrowing_apr, 2)} 借款 APR`} />
             <span className="n"><b>{fmtToken(maximum, bank.decimals, 4)}</b><span className="muted">最多可借</span></span>
             <button className="btn sm" disabled={BigInt(maximum) === 0n} onClick={() => goMarket(bank.label, 'borrow')}>借出</button>
           </li>;
-        })}</ul></section>
+        })}</ul>}</section>
       </div>
     </>}
   </div>;

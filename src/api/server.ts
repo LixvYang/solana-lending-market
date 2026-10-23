@@ -10,6 +10,7 @@ import { readJson, corsHeaders, allowOrigin } from './http-body';
 import { buildTransaction, PriceStale } from './builder';
 import { sendTransaction } from './send';
 import { getWallet } from './wallet';
+import { indexConfirmed } from './confirmed';
 import type { ClientConfig } from './types';
 import type { WalletServices } from './wallet-rpc';
 export function portNumber(value: string | undefined): number {
@@ -19,7 +20,7 @@ export function portNumber(value: string | undefined): number {
     throw new Error('invalid PORT');
   return Number(value);
 }
-export const hostAddress = (value = process.env.HOST): string => value || '127.0.0.1';
+export const hostAddress = (value = process.env.HOST, port = process.env.PORT): string => value || (port ? '0.0.0.0' : '127.0.0.1');
 function address(value: string | null, width: number): string {
   try {
     if (!value || decodeBase58(value).length !== width)
@@ -47,7 +48,8 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
       if (!services) throw new ApiError(503, 'wallet RPC unavailable');
       let body;
       if (url.pathname === '/api/build') body = await buildTransaction(db, services, input);
-      else if (url.pathname === '/api/send') body = await sendTransaction(input, services.rpc, services.clock);
+      else if (url.pathname === '/api/send') body = await sendTransaction(input, services.rpc, services.clock,
+        signature => indexConfirmed(db, services.rpc, signature, services.oracleOwners));
       else {
         let wallet;
         try { wallet = decodeURIComponent(url.pathname.split('/').at(-1)!); }
@@ -60,8 +62,11 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
       throw new ApiError(404, 'not found');
     let body: unknown;
     switch (url.pathname) {
+      case '/healthz':
+      case '/api/healthz':
       case '/api/health':
-        await db.query('SELECT 1');
+        try { await db.query('SELECT 1'); }
+        catch { throw new ApiError(503, 'database unavailable'); }
         body = { ok: true };
         break;
       case '/api/pool':

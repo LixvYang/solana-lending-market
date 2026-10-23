@@ -5,8 +5,8 @@ import { TokenIcon } from '../tokens';
 import { chain } from './chain';
 
 /** 免费领测试币(有限流)。想要更多或换成别的币,去"兑换"页。 */
-export function GetTokens({ address, faucetUrl, tokens, onDone, onGoSwap }: {
-  address: string; faucetUrl: string; tokens: WalletTokenView[]; onDone: () => void; onGoSwap: () => void;
+export function GetTokens({ address, faucetUrl, tokens, onDone }: {
+  address: string; faucetUrl: string; tokens: WalletTokenView[]; onDone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -23,8 +23,7 @@ export function GetTokens({ address, faucetUrl, tokens, onDone, onGoSwap }: {
   return (
     <div className="faucet">
       <div className="faucet-icons" aria-hidden>{tokens.map((t) => <TokenIcon key={t.mint} symbol={t.label} size={22} />)}</div>
-      <div className="faucet-text"><b>领取测试币</b><span className="muted">免费,每 10 分钟一次;需要更多可以 <button className="linkish" onClick={onGoSwap} type="button">用 SOL 兑换</button></span></div>
-      <button className="btn" onClick={claim} disabled={busy}>{busy ? '领取中…' : '领取'}</button>
+      <button className="btn" onClick={claim} disabled={busy}>{busy ? '领取中…' : '领取测试币'}</button>
       {note && <div className={`notice ${note.ok ? 'ok' : 'bad'}`}>{note.text}</div>}
     </div>
   );

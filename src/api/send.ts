@@ -47,7 +47,8 @@ async function beforeDeadline<T>(operation: () => Promise<T>, ms: number): Promi
   try { return await Promise.race([operation(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Error('confirmation deadline')), ms); })]); }
   finally { clearTimeout(timer); }
 }
-export async function submitSigned(bytes: Uint8Array, signature: string, rpc: Pick<WalletRpc, 'sendRawTransaction' | 'getSignatureStatuses'>, clock: WaitClock = realClock): Promise<SendResponse> {
+export async function submitSigned(bytes: Uint8Array, signature: string, rpc: Pick<WalletRpc, 'sendRawTransaction' | 'getSignatureStatuses'>, clock: WaitClock = realClock,
+  index?: (signature: string) => Promise<void>): Promise<SendResponse> {
   const end = clock.now() + 60_000;
   // 不以 send 报错判定失败：重复提交/响应丢失时，同一签名可能已经落链。
   // 跳过 preflight 后从 signature status 取链上错误，避免不可信异常字符串泄露 RPC 凭据。
@@ -55,17 +56,19 @@ export async function submitSigned(bytes: Uint8Array, signature: string, rpc: Pi
     try {
       const status = (await beforeDeadline(() => rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }), end - clock.now())).value[0];
       if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
-        if (status.err) return { signature, status: 'failed', error: programError(status.err), slot: String(status.slot) };
-        return { signature, status: 'confirmed', error: null, slot: String(status.slot) };
+        if (status.err) return { signature, status: 'failed', error: programError(status.err), slot: String(status.slot), indexed: false };
+        let indexed = false;
+        if (index) { try { await index(signature); indexed = true; } catch { /* tx 已确认;索引进程稍后会补入 */ } }
+        return { signature, status: 'confirmed', error: null, slot: String(status.slot), indexed };
       }
     } catch { /* transient RPC failure: next poll, no exception logging */ }
-    if (clock.now() >= end) return { signature, status: 'timeout', error: null, slot: null };
+    if (clock.now() >= end) return { signature, status: 'timeout', error: null, slot: null, indexed: false };
     try { await beforeDeadline(() => rpc.sendRawTransaction(bytes, { skipPreflight: true, maxRetries: 0 }), end - clock.now()); }
     catch { /* same signed bytes are replayed; never rebuild or re-sign */ }
     await clock.sleep(Math.min(2000, Math.max(0, end - clock.now())));
   }
 }
-export function sendTransaction(input: unknown, rpc: WalletRpc, clock?: WaitClock): Promise<SendResponse> {
+export function sendTransaction(input: unknown, rpc: WalletRpc, clock?: WaitClock, index?: (signature: string) => Promise<void>): Promise<SendResponse> {
   const { bytes, signature } = guardTransaction(input);
-  return submitSigned(bytes, signature, rpc, clock);
+  return submitSigned(bytes, signature, rpc, clock, index);
 }

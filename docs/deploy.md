@@ -1,5 +1,40 @@
 # Devnet 部署
 
+## 通用容器平台
+
+构建仓库根目录的 `Dockerfile`，同一个镜像启动四个常驻服务，分别设置 `SERVICE=api`、`faucet`、`keeper`、`ingest`。API 启动时取得 Postgres session advisory lock 并执行迁移；其他服务检查迁移齐全后启动。每个服务独立设置环境变量，不依赖平台专有配置文件或本地持久卷。只有 API 与 faucet 需要公网入口；keeper、ingest 只需出站访问 Postgres 与 Solana RPC。
+
+| 变量 | 服务 | 说明 |
+|---|---|---|
+| `SERVICE` | 全部 | `api` / `faucet` / `keeper` / `ingest` |
+| `PORT` | API、faucet | 平台注入的监听端口；未设置时本地 API 8787、faucet 8788。平台注入 `PORT` 时默认监听 `0.0.0.0`，显式 `HOST` 优先 |
+| `HOST` | 全部 HTTP 服务 | 可选监听地址；本地默认 `127.0.0.1` |
+| `DATABASE_URL` | 全部 | Postgres 连接 URI；支持 `sslmode=require` |
+| `PG_POOL_MAX` | 全部 | 每个进程连接池上限，默认 5。四个进程合计最多 20 条连接；连接数较紧时按实例数调低 |
+| `RPC_URL` | faucet、keeper、ingest；API 可选 | Solana devnet RPC。API 不设时只读数据仍可用，钱包接口不可用 |
+| `FAUCET_SECRET_KEY` | faucet | 专用水龙头密钥，JSON 数组或 base58；与 `FAUCET_KEYPAIR` 文件路径二选一 |
+| `KEEPER_SECRET_KEY` | keeper | 专用 keeper 密钥，JSON 数组或 base58；与 `KEEPER_KEYPAIR` 文件路径二选一 |
+| `FAUCET_URL` | API | 浏览器可访问的 faucet URL，例如 `https://api.example.com/faucet` |
+| `ALLOWED_ORIGINS` | API、faucet | 前端 HTTPS 源，多个值逗号分隔 |
+
+API 和 faucet 的平台健康检查路径均为 `GET /healthz`，会执行 `SELECT 1`，不会访问 RPC。keeper 与 ingest 只有在平台注入 `PORT` 时才启动健康端口；其 `/healthz` 根据最近一次成功轮次判断，超过三个轮询周期返回 503。应用接收 `SIGTERM`/`SIGINT` 后停止接收新请求或结束当前轮次，最多等待 10 秒，再由容器强制结束。
+
+部署步骤：构建一次镜像；创建上述四个服务并配置各自 `SERVICE`；在四个服务里设置 `DATABASE_URL` 与合理的 `PG_POOL_MAX`；再给需要链上访问的服务设置 `RPC_URL`，给 faucet/keeper 配置各自专用密钥。先部署 API 完成迁移，再启动其余服务。API 与 faucet 分别绑定公网域名并配置 HTTPS；不要把数据库或 worker 端口公开。
+
+Supabase 使用 **Session 模式**连接池 URI。迁移依赖 Postgres 会话级 advisory lock；Transaction 模式会在事务结束后更换连接，不适合该迁移锁语义。URI 中保留 `sslmode=require`。
+
+### Railway 示例
+
+1. 从 GitHub 创建四个 Railway service，均指向同一仓库与根目录 Dockerfile；每个 service 的 `SERVICE` 分别设为 `api`、`faucet`、`keeper`、`ingest`。
+2. 为四个 service 设置同一 Supabase Session Pooler `DATABASE_URL`，以及 `PG_POOL_MAX`(例如 2，按数据库连接上限和副本数计算)。
+3. 设置所需的 `RPC_URL`；faucet 与 keeper 分别设置 `FAUCET_SECRET_KEY`、`KEEPER_SECRET_KEY`。使用 Railway secret variables 存储密钥，不使用部署者/管理员钱包。
+4. 为 API、faucet 开启公网上线域名；将 Railway 提供的 `PORT` 留给应用监听。为两个服务配置 `/healthz`。keeper、ingest 不生成公网域名，但可以保留平台内部健康探针端口。
+5. 等 API 的迁移与 `/healthz` 成功后启动 faucet、keeper、ingest。设置 API 的 `FAUCET_URL` 为公开 faucet URL，`ALLOWED_ORIGINS` 为前端域名。
+
+Railway 控制台的字段名称可能调整；按上述容器、环境变量与健康检查契约配置即可，不需要 Railway 专有启动脚本。
+
+## 现有 Vercel + 常驻主机部署
+
 部署拓扑：Vercel 提供静态前端；一台常驻主机运行 API、测试币水龙头/兑换台、price-keeper 与 ingest；Postgres 使用 Supabase。所有链上交互仍在 devnet。
 
 ## Vercel 前端
@@ -21,18 +56,19 @@ API 主机需提供 HTTPS(可由 Caddy/Nginx 等反向代理终止 TLS)，否则
 - API、ingest：不需要 SOL 钱包。用户自己的 Solana 钱包需要 SOL 支付交易费与首次创建代币账户的租金。
 - 管理员钱包不放在服务器上。若要新建/升级程序或管理银行，单独在可信环境使用 `ANCHOR_WALLET`，本部署服务不需要它。
 
-先建镜像并迁移数据库，再进行一次全量回填：
+先构建同一镜像，再进行一次全量回填(运行服务时 API 入口会自动迁移)：
 
 ```bash
 docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml run --rm api node --import tsx scripts/migrate.ts
+docker compose -f docker-compose.prod.yml up -d api
+# 等待 API /healthz 返回 200，确认数据库迁移完成
 docker compose -f docker-compose.prod.yml run --rm api node --import tsx scripts/ingest.ts --backfill
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 Compose 启动后，API 在 8787、兑换台/水龙头在 8788 监听；生产环境应由反向代理转发并提供 HTTPS。`.env` 至少设置 `RPC_URL`、`DATABASE_URL`、`FAUCET_URL`(例如 `https://api.example.com/faucet`)、`ALLOWED_ORIGINS`、`FAUCET_KEYPAIR_FILE` 与 `KEEPER_KEYPAIR_FILE`。API/水龙头在容器内监听 `0.0.0.0`；本地启动仍默认只监听 `127.0.0.1`。
 
-日常检查可用 `docker compose -f docker-compose.prod.yml ps`、`docker compose -f docker-compose.prod.yml logs -f api faucet keeper ingest`；API 与兑换台健康检查分别是 `/api/health`、`/health`。首次回填只需执行一次；后续 ingest 服务以 `--follow` 常驻跟随新交易。
+日常检查可用 `docker compose -f docker-compose.prod.yml ps`、`docker compose -f docker-compose.prod.yml logs -f api faucet keeper ingest`；API 与兑换台健康检查分别是 `/healthz`、`/healthz`。首次回填只需执行一次；后续 ingest 服务以 `--follow` 常驻跟随新交易。
 
 ## RPC 预算
 

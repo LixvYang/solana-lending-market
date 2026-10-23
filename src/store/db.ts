@@ -9,6 +9,7 @@ export type Row = Record<string, unknown>;
 export interface Db {
   query<T extends Row = Row>(sql: string, params?: unknown[]): Promise<{ rows: T[]; rowCount: number }>;
   transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T>;
+  withAdvisoryLock?<T>(key: number, fn: (locked: Db) => Promise<T>): Promise<T>;
 }
 export function normalizeRows<T extends Row>(rows: T[], fields: { name: string; dataTypeID: number }[] = []): T[] {
   const int8 = new Set(fields.filter(field => field.dataTypeID === 20).map(field => field.name));
@@ -40,8 +41,25 @@ function pgConnection(connection: Pool | PoolClient): Db {
   };
 }
 export function pgDb(pool: Pool = new Pool({ connectionString: process.env.DATABASE_URL ??
-  'postgres://indexer:indexer@localhost:5433/indexer' })) {
-  return { ...pgConnection(pool), close: () => pool.end() };
+  'postgres://indexer:indexer@localhost:5433/indexer', max: poolMax(process.env.PG_POOL_MAX) })) {
+  return { ...pgConnection(pool), close: () => pool.end(), withAdvisoryLock: async <T>(key: number, fn: (locked: Db) => Promise<T>) => {
+    const client = await pool.connect();
+    let locked = false;
+    try {
+      await client.query('SELECT pg_advisory_lock($1)', [key]); locked = true;
+      return await fn(pgConnection(client));
+    } finally {
+      if (locked) {
+        try { await client.query('SELECT pg_advisory_unlock($1)', [key]); client.release(); }
+        catch (error) { client.release(error as Error); throw error; }
+      } else client.release();
+    }
+  } };
+}
+export function poolMax(value: string | undefined): number {
+  if (value === undefined) return 5;
+  if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 100) throw new Error('invalid PG_POOL_MAX');
+  return Number(value);
 }
 export function pgliteDb(database = new PGlite()) {
   const adapt = (connection: PGlite | Transaction): Db => ({

@@ -1,6 +1,6 @@
 # src/api
 
-EP7 只读数据库视图与 M7 钱包构建/转发/查询。只读路由只读 Db；钱包路由使用注入 RPC，不持有管理员密钥，不写库。
+EP7 只读数据库视图与 M7 钱包构建/转发/查询。只读路由只读 Db；钱包路由使用注入 RPC，不持有管理员密钥。确认后的 marginfi 交易会乐观入库并刷新相关账户。
 价格来自已入库的价格账户(Switchboard 布局的 mock 或 Pyth PriceUpdateV2)，标签来自链下 labels。
 
 | 文件 | 角色 | 功能 |
@@ -34,6 +34,7 @@ EP7 只读数据库视图与 M7 钱包构建/转发/查询。只读路由只读 
 | program-error.ts | 错误 | IDL 自定义码、中文提示、安全 runtime 日志 |
 | http-body.ts | HTTP | 流式 64KB JSON 与 POST CORS |
 | send.ts / send.test.ts | 转发 | Ed25519/大小/程序守卫、确认/重播与幂等 |
+| confirmed.ts / confirmed.test.ts | 即时同步 | confirmed 原始交易、指令解码、相关协议账户与预言机快照 |
 | wallet.ts | 查询 | SOL/SPL 余额、当前池子账户与水龙头 URL |
 | wallet-test-utils.ts | 测试辅助 | 无网络 RPC、精确 SPL/价格字节与时钟 |
 | wallet-http.test.ts | 测试 | 钱包与无 socket HTTP 状态/JSON/脱敏 |

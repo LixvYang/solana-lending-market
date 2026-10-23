@@ -54,6 +54,7 @@ test('faucet insufficient balance 503 and limit next_allowed_at, CORS and safe R
   const unavailable = await faucetRoute('POST', '/faucet', { wallet }, 'ip', handler); assert.equal(unavailable.status, 503); assert.match(unavailable.body, /余额不足/);
   const limit = await faucetRoute('POST', '/faucet', { wallet }, 'ip', handler); assert.equal(limit.status, 429); assert.ok(JSON.parse(limit.body).next_allowed_at);
   assert.equal((await faucetRoute('GET', '/faucet', null, 'ip', handler)).status, 404); assert.equal((await faucetRoute('OPTIONS', '/faucet', null, 'ip', handler)).status, 204);
+  assert.equal((await faucetRoute('GET', '/healthz', null, 'ip', handler, undefined, async () => { throw Error(); })).status, 503);
   const bad = createFaucet(payer, fakeRpc({ getAccountInfo: async () => { throw Error('RPC_URL api-key=secret private key'); } }), grants, 2000, fakeClock());
   const failure = await faucetRoute('POST', '/faucet', { wallet }, 'ip', bad); assert.equal(failure.status, 503); assert.ok(!/RPC_URL|api-key|secret|private/.test(failure.body));
 });

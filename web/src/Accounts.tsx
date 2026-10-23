@@ -23,9 +23,9 @@ export function Accounts({ accounts, pool }: { accounts: AccountView[]; pool: Po
     : <span className="muted">—</span>;
   return (
     <div className="card">
-      <h2>清算监控<small>健康度 = Σ存款×价格×权重 − Σ借款×价格×权重（维持权重，USD）；小于 0 即可被清算</small></h2>
+      <h2>清算监控</h2>
       <div className="tablewrap"><table>
-        <thead><tr><th>账户</th><th>存款</th><th>借款</th><th className="n">维持健康度</th><th className="n">开仓健康度</th><th>状态</th></tr></thead>
+        <thead><tr><th>账户</th><th>存款</th><th>借款</th><th className="n">距清算金额</th><th className="n">可借余量</th><th>状态</th></tr></thead>
         <tbody>{accounts.map((a) => (
           <tr key={a.address}>
             <td><b>{a.label}</b><div className="muted mono">{short(a.address)}</div></td>

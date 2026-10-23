@@ -3,12 +3,25 @@ import { readFileSync } from 'node:fs';
 import { Connection, Keypair, TransactionMessage, VersionedTransaction, type TransactionInstruction } from '@solana/web3.js';
 import { rpcConnection } from '../src/api/wallet-rpc';
 import { submitSigned } from '../src/api/send';
-import { encodeBase58 } from '../src/core/base58';
+import { decodeBase58, encodeBase58 } from '../src/core/base58';
 export function readKeypair(path: string | undefined): Keypair {
   if (!path) throw Error('keypair path required');
   const bytes: unknown = JSON.parse(readFileSync(path, 'utf8'));
   if (!Array.isArray(bytes) || bytes.length !== 64 || bytes.some(b => !Number.isInteger(b) || b < 0 || b > 255)) throw Error('invalid keypair file');
   return Keypair.fromSecretKey(Uint8Array.from(bytes));
+}
+export function serviceKeypair(secret: string | undefined, path: string | undefined, label: string): Keypair {
+  if (secret && path) throw Error(`${label} secret and keypair path cannot both be set`);
+  if (secret) {
+    try {
+      const encoded = secret.trim();
+      const value: unknown = encoded.startsWith('[') ? JSON.parse(encoded) : Array.from(decodeBase58(encoded));
+      if (!Array.isArray(value) || value.length !== 64 || value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) throw Error();
+      return Keypair.fromSecretKey(Uint8Array.from(value as number[]));
+    } catch { throw Error(`invalid ${label} secret key`); }
+  }
+  if (!path) throw Error(`missing ${label} credentials`);
+  try { return readKeypair(path); } catch { throw Error(`invalid ${label} keypair file`); }
 }
 export function cliRpc() {
   if (!process.env.RPC_URL) throw Error('RPC configuration required');

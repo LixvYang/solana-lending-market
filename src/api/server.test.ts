@@ -10,7 +10,7 @@ import { encodeBase58 } from '../core/base58';
 test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe without socket',async()=>{
  const db=await seedApi();try{
   const signature=run.steps.find(s=>s.label==='bob borrow 5000 tUSDC')!.signatures[0];
-  for(const url of ['/api/pool','/api/accounts','/api/activity?limit=2',`/api/activity?bank=${run.addresses.banks.tSOL}`,`/api/liquidations?bank=${run.addresses.banks.tSOL}`,`/api/rate-curve?bank=${run.addresses.banks.tSOL}`,`/api/bank-history?bank=${run.addresses.banks.tSOL}`,`/api/tx/${signature}`,'/api/health']){
+  for(const url of ['/api/pool','/api/accounts','/api/activity?limit=2',`/api/activity?bank=${run.addresses.banks.tSOL}`,`/api/liquidations?bank=${run.addresses.banks.tSOL}`,`/api/rate-curve?bank=${run.addresses.banks.tSOL}`,`/api/bank-history?bank=${run.addresses.banks.tSOL}`,`/api/tx/${signature}`,'/api/health','/api/healthz','/healthz']){
    const result=await route(db,'GET',url);assert.equal(result.status,200);assert.equal(result.headers['Access-Control-Allow-Origin'],'http://localhost:5173');
    assert.ok(!/api-key|DATABASE_URL|RPC_URL/.test(result.body));assert.ok(JSON.parse(result.body));
   }
@@ -21,7 +21,7 @@ test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe with
   assert.deepEqual(JSON.parse((await route(db,'GET','/api/config',undefined,{faucetUrl:'http://localhost:8788/faucet'} as never)).body),{faucet_url:'http://localhost:8788/faucet'});
   assert.equal((await route(db,'POST','/api/pool')).status,404);assert.equal((await route(db,'OPTIONS','/api/pool')).status,204);
   const bad:Db={query:async()=>{throw Error('DATABASE_URL postgres://secret RPC_URL https://host?api-key=secret');},transaction:db.transaction};
-  const failure=await route(bad,'GET','/api/health');assert.equal(failure.status,500);assert.equal(failure.body,'{"error":"internal server error"}');
+  const failure=await route(bad,'GET','/api/healthz');assert.equal(failure.status,503);assert.equal(failure.body,'{"error":"database unavailable"}');
   await db.query("INSERT INTO raw_tx(signature,slot,tx) VALUES ('big',9223372036854775807,'{}'::jsonb)");
   await db.query("INSERT INTO instructions(signature,ix_index,slot,name,args,accounts,remaining) VALUES ('big',0,9223372036854775807,'unknown','{}','{}','[]')");
   const activity=JSON.parse((await route(db,'GET','/api/activity')).body);assert.equal(activity.items[0].slot,'9223372036854775807');
@@ -30,9 +30,9 @@ test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe with
   await handle(db,{method:'GET',url:'/api/pool'} as IncomingMessage,res as unknown as ServerResponse);
   assert.equal(status,200);assert.equal(headers['Content-Type'],'application/json; charset=utf-8');assert.equal(JSON.parse(body).banks.length,2);
   assert.equal(portNumber(undefined),8787);assert.equal(portNumber('9000'),9000);for(const p of ['0','65536','NaN','1.5',''])assert.throws(()=>portNumber(p));
-  const previousHost = process.env.HOST;
-  try { delete process.env.HOST; assert.equal(hostAddress(),'127.0.0.1'); process.env.HOST='0.0.0.0'; assert.equal(hostAddress(),'0.0.0.0'); }
-  finally { if(previousHost===undefined)delete process.env.HOST;else process.env.HOST=previousHost; }
+  const previousHost = process.env.HOST, previousPort = process.env.PORT;
+  try { delete process.env.HOST; delete process.env.PORT; assert.equal(hostAddress(),'127.0.0.1'); process.env.PORT='9000'; assert.equal(hostAddress(),'0.0.0.0'); process.env.HOST='10.0.0.2'; assert.equal(hostAddress(),'10.0.0.2'); }
+  finally { if(previousHost===undefined)delete process.env.HOST;else process.env.HOST=previousHost;if(previousPort===undefined)delete process.env.PORT;else process.env.PORT=previousPort; }
  }finally{await db.close();}
 });
 test('new CLI help and invalid arguments run offline; HTTP serializes actual bigint',async()=>{

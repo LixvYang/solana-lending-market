@@ -53,3 +53,14 @@ test('confirmation deadline also bounds an RPC that never resolves', async () =>
   const result = await sendTransaction(fixture.input, fakeRpc({ getSignatureStatuses: async () => new Promise(() => {}) }), clock);
   assert.equal(result.status, 'timeout');
 });
+
+test('confirmed responses report whether immediate indexing succeeded', async () => {
+  const fixture = signedFixture();
+  const ok = await sendTransaction(fixture.input, fakeRpc(), fakeClock(), async () => {});
+  assert.equal(ok.status, 'confirmed');
+  assert.equal(ok.indexed, true);
+
+  const failed = await sendTransaction(fixture.input, fakeRpc(), fakeClock(), async () => { throw Error('db unavailable'); });
+  assert.equal(failed.status, 'confirmed');
+  assert.equal(failed.indexed, false);
+});

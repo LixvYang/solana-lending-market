@@ -9,8 +9,8 @@ const SERIES = {
   utilization: [{ name: '利用率', color: 'var(--s1)', value: (p: BankHistoryView['points'][number]) => p.utilization }],
   apr: [{ name: '借款 APR', color: 'var(--s1)', value: (p: BankHistoryView['points'][number]) => p.borrowing_apr },
     { name: '存款 APR', color: 'var(--s2)', value: (p: BankHistoryView['points'][number]) => p.lending_apr }],
-  total: [{ name: '总存款', color: 'var(--s1)', value: (p: BankHistoryView['points'][number]) => p.total_deposits_usd },
-    { name: '总借款', color: 'var(--s2)', value: (p: BankHistoryView['points'][number]) => p.total_borrows_usd }],
+  total: [{ name: '总存款', color: 'var(--s2)', value: (p: BankHistoryView['points'][number]) => p.total_deposits_usd },
+    { name: '总借款', color: 'var(--s1)', value: (p: BankHistoryView['points'][number]) => p.total_borrows_usd }],
 };
 const labels: Record<Mode, string> = { utilization: '利用率', apr: 'APR', total: '总量' };
 
@@ -42,7 +42,7 @@ export function BankHistory({ history }: { history: BankHistoryView }) {
     <div className="seg" role="group" aria-label="历史曲线指标">{(Object.keys(labels) as Mode[]).map(key =>
       <button key={key} className={mode === key ? 'on' : ''} aria-pressed={mode === key} onClick={() => setMode(key)}>{labels[key]}</button>)}</div>
     {!points.length ? <p className="muted">还没有银行状态历史。</p>
-      : points.length === 1 ? <p className="muted">目前只有 1 个状态记录（slot {points[0].slot}{points[0].block_time ? ` · ${fmtTime(points[0].block_time)}` : ''}），后续状态变化后会形成曲线。</p>
+      : points.length === 1 ? <p className="muted">目前只有 1 个状态记录（slot {points[0].slot}{points[0].block_time ? `，${fmtTime(points[0].block_time)}` : ''}），后续状态变化后会形成曲线。</p>
         : mode === 'total' && values.length === 0 ? <p className="muted">这些历史时刻没有可用的价格快照，暂时无法显示美元总量。</p>
           : <><div className="history-legend">{series.map(item => <span key={item.name}><i style={{ background: item.color }} />{item.name}</span>)}</div>
             <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${history.label}历史${labels[mode]}阶梯曲线`}>

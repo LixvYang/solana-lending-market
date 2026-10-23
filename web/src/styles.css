@@ -345,3 +345,5 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 /* 提示条里的领取按钮不需要水龙头卡片自带的底色和内边距(否则是框中框)。 */
 .wallet-hint .faucet { display: inline-flex; margin: 0; padding: 0; background: none; }
 .wallet-hint .faucet-icons { display: none; }
+
+.net.mock { color: var(--amber-11); background: var(--amber-3); }

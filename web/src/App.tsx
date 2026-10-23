@@ -16,6 +16,9 @@ import { AssetPage } from './market/AssetPage';
 import { WalletButton } from './wallet/WalletButton';
 import { explorer } from './wallet/chain';
 
+// ?mock 时整页是假数据、交易也是假的(曾有人在 mock 页兑换后以为没到账),必须一眼可见。生产构建里为 false。
+const MOCK = import.meta.env.DEV && new URLSearchParams(location.search).has('mock');
+
 export function App() {
   const [tab, go] = useTab();
   const marketSymbol = useMarketSymbol();
@@ -77,7 +80,7 @@ export function App() {
       <header className="top">
         <div className="brand">
           <svg className="logo" viewBox="0 0 32 32" aria-hidden><circle cx="16" cy="16" r="16" fill="var(--s1)" /><path d="M11 9.2h13l-3 3.3H8zM8 14.4h13l3 3.3H11zM11 19.6h13l-3 3.3H8z" fill="white" /></svg>
-          <div><h1>借贷市场 <span className="net">Devnet</span></h1></div>
+          <div><h1>借贷市场 <span className="net">Devnet</span>{MOCK && <span className="net mock">模拟数据</span>}</h1></div>
         </div>
         <div className="top-actions">
           <WalletButton />

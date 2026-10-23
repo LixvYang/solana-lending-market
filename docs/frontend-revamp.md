@@ -450,3 +450,10 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **容器实测**(Codex 沙箱连不上 Docker,由 Claude 做):同一镜像按 `SERVICE=api/faucet/keeper/ingest` 起四个容器、平台式注入 `PORT=8080`,25 秒后全部运行、`/healthz` 200;keeper 用环境变量注入的 `KEEPER_SECRET_KEY` 成功发出刷新交易，日志不含私钥;`docker stop` 四个服务均 0.2 秒内退出、退出码 0。
 - 新建专用 keeper 钱包 `CpJMdAiA55RgtkTNm4jLqQVgP4wGHiTMgcSjGD1ETYY1`(私钥在 `~/.config/solana/lending-market-keeper.json`,不入库),管理员转入 0.1 SOL;本机 keeper 已改用它，不再用管理员钱包。
 - 全量 251/251,文档片段 34/34。
+
+### 缺陷：兑换"已确认"但余额不变(2026-10-23,作者报告)
+
+两个独立原因，按调试流程先取证再修:
+1. **作者用的是 `?mock` 页面**(Claude 做浏览器审查时留下的标签页，地址带 `?mock&testwallet=bob`):兑换走前端假数据，返回固定的 mock 签名，链上没有任何交易——作者在 Explorer 看到的正是这个 mock 签名。根因：mock 模式在界面上与真实环境无法区分。修复：mock 时页头显示琥珀色"模拟数据"标签(生产构建里不存在)。
+2. **真实环境兑换页根本拿不到汇率**(Claude 复现时发现):兑换台跨域只回显 `http://localhost:5173`,而本机 5173 被另一个旧 Vite 占用、开发服务器在 5174,浏览器拦下 `/swap/rates`,页面一直"读取汇率中…";"领取测试币"同理。这个问题 T13 之前就存在，一直没暴露，因为兑换只用 mock 或直接调接口的脚本测过。修复:`allowOrigin` 放行 `localhost`/`127.0.0.1` 任意端口，部署域名仍靠 `ALLOWED_ORIGINS`;新增测试(修复前失败)。
+- 验证：脚本走兑换台接口 0.1 SOL → 0.1 pSOL 并存入成功;浏览器(非 mock)用测试钱包兑换 0.01 SOL → 0.01 pSOL,签名 `5UKbxZr9…` 链上 Finalized,SOL 0.05 → 0.0385(含手续费与 ATA 租金)。

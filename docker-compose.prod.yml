@@ -1,0 +1,40 @@
+services:
+  api:
+    build: .
+    command: ["node", "--import", "tsx", "scripts/serve-api.ts"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+    ports: ["127.0.0.1:8787:8787"]
+
+  faucet:
+    build: .
+    command: ["node", "--import", "tsx", "scripts/faucet.ts"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      FAUCET_PORT: 8788
+      FAUCET_KEYPAIR: /run/secrets/faucet.json
+    volumes:
+      - ${FAUCET_KEYPAIR_FILE:?set FAUCET_KEYPAIR_FILE}:/run/secrets/faucet.json:ro
+    ports: ["127.0.0.1:8788:8788"]
+
+  keeper:
+    build: .
+    command: ["node", "--import", "tsx", "scripts/price-keeper.ts"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      KEEPER_KEYPAIR: /run/secrets/keeper.json
+    volumes:
+      - ${KEEPER_KEYPAIR_FILE:?set KEEPER_KEYPAIR_FILE}:/run/secrets/keeper.json:ro
+
+  ingest:
+    build: .
+    command: ["node", "--import", "tsx", "scripts/ingest.ts", "--follow"]
+    restart: unless-stopped
+    env_file: .env
+

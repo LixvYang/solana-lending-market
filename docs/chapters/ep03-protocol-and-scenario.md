@@ -83,9 +83,12 @@ Bank 不记"某人存了多少",而是记**份额**(shares)和**份额价值**(s
 
 三个用户、两个代币、group、bank 的密钥都由一个固定字符串经 SHA-256 得到,**不落盘**:
 
+种子中的旧项目名是历史标识,改动会改变派生地址,因此不能修改。
+
 <!-- snippet: scenario/lib/actors.ts#ep3-actors -->
 ```ts
 // 教学账户的种子公开，任何人都能签名；只用于 devnet，不能存真实资产。
+// 历史项目名参与地址派生，改动会指向链上不存在的账户。
 export function deriveKeypair(label: string): Keypair {
   const seed = createHash('sha256').update(`solana-lending-indexer/${label}`).digest();
   return Keypair.fromSeed(seed);

@@ -143,17 +143,15 @@ export async function snapshotAccounts(db: Db, rpc: AccountRpc, addresses: strin
       if (account.data[1] !== 'base64') throw new Error(`unexpected account encoding ${address}`);
       return [{ address, account, ...accountData(account.data[0], idl) }];
     });
-    await db.transaction(async tx => {
-      for (const state of states) await tx.query(`INSERT INTO account_states(address, slot, type, owner, lamports, data)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb) ON CONFLICT (address, slot) DO NOTHING`,
-      [state.address, response.context.slot, state.type, state.account.owner, state.account.lamports, toJson(state.data)]);
-    });
+    await saveSnapshotBatch(db, states, response.context.slot);
     count += states.length;
   }
   return count;
 }
 ```
 <!-- /snippet -->
+
+> **后续增补**(`ep8-end` 之后，见 `docs/frontend-revamp.md` 的 T7):`ep6-end` 里这里直接 `INSERT … ON CONFLICT (address, slot) DO NOTHING`,每次采样都把全部账户写一遍。长时间 `--follow` 后，本机库积到 27.8 万行，而银行数据真正变化的只有 36 次。现在 `saveSnapshotBatch` 先比较该地址最新一行的 `data`,相同就跳过;"最近一次采样到哪个 slot"另存在 `ingest_cursor`(`account_snapshot`)。于是 `account_states` 只剩变化点，正好就是资产页历史曲线要的数据。
 
 ## 两种取数据的方式
 

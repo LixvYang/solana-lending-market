@@ -53,12 +53,17 @@
 
 - 2026-10-17:前端改为四个 tab(借贷池 / 账户 / 链上活动 / 我来操作),新增代币参数卡与"存入/借出"直达;复查 Switchboard devnet oracle 仍离线(D-018)。
 
+- 2026-10-22:前端改版为"devnet 可用的借贷产品"(D-023,任务板与每项审查记录见 `docs/frontend-revamp.md`;Codex 实现、Claude 审查)。资产详情页(右侧操作面板 + 签名前风险预览、历史曲线、本资产流水与清算明细)、我的仓位(总览 + 新手五步)、链上数据(活动 + 清算监控)、toast、中文钱包按钮;界面用"债务"不用"负债"。`/api/pool` 从约 1 秒降到毫秒级(跳跃扫描，不加缓存);快照写入去重。新增 pBTC/pETH/pHYPE(Pyth 实时价，`oracle_max_age = 900`)并在 devnet 端到端验证(D-024)。审查中修复了十余处 Codex 自测未发现的问题(逐项见任务板)。测试 229 项。
+- 2026-10-22:项目改名"借贷市场"(D-025):GitHub 仓库与本地目录改为 `solana-lending-market`,文档/教程/分镜同步;派生种子保留旧字符串。兑换台改为逐资产降级(HYPE 推送断更 36 分钟时不再整表不可用,D-026)。HYPE 改为自有固定价 $80 的 tHYPE,后台 price-keeper 定时写链(D-027)。Helius 免费额度(devnet 也计费)下降低 RPC 用量:keeper 单笔批量、180 秒;汇率服务端缓存 15 秒、仅兑换页轮询;钱包一次批量读取(T11)。
+- 2026-10-23:清理存量重复快照(27.8 万 → 2,227 行，整库 11 MB);索引进程跟随改为 15 秒、有新交易才快照(T12);部署准备:HOST/ALLOWED_ORIGINS/VITE_API_BASE、keeper 专用钱包、Dockerfile 与 compose、`docs/deploy.md`(T13)。
+
 ## 下一步
 
 1. **录制视频**:先拍 EP2–EP7,最后拍 EP1;EP8 可选。分镜在 `video/`,清单在 `docs/recording-checklist.md`,开拍前跑 `scripts/check-ready.ts`。
 2. 用真实 Phantom/Solflare 试一遍钱包交互(目前只用开发测试钱包验证过签名流程)。
 3. ~~监控 Switchboard~~:Switchboard 已于 2026-09 整体关停,不会恢复(D-018)。真实价格已通过 pSOL 银行(Pyth)提供(D-019);待办:真实 Phantom 走一遍 pSOL 流程、长时间观察 Pyth devnet 更新节奏。
 4. 已知待办:账户状态逐笔历史;压测与长时间运行;在真实分叉上验证终局清扫的删除路径。
+5. 前端改版遗留(见 `docs/frontend-revamp.md`):把 `assets/tokens` 推到新仓库后更新链上元数据 URI;清理 `account_states` 存量重复快照(约 27.8 万行 → 2,200 行，会删数据，待作者确认);pBTC/pETH/pHYPE 的 Metaplex 元数据;真实 Phantom 走一遍新界面。
 
 ## M2 离线验收（2026-10-12）
 
@@ -119,3 +124,8 @@
 ## 本机工具链核查（2026-10-17）
 
 - 只读核查 `rclaude`：本机 SSH 启动 VPS Claude，VPS 经 Tailscale SSH 回连 Mac 的 `claude mcp serve`，文件和命令工具在 Mac 执行；回连实测返回 Darwin 与当前项目路径。未修改中转配置或项目代码。发现多个 PPID=1 的 MCP 服务进程，是否为残留待验证；工具可访问范围未按项目目录做系统级隔离。
+
+## 前端改版 T1（2026-10-22）
+
+- 完成市场资产详情 hash 路由与页面，市场行和存入/借出按钮进入详情；添加详情 KPI、存借信息、抵押参数、利率曲线、说明和 T3 占位面板。状态为 review。
+- `pnpm typecheck && pnpm test` 通过（174 项），`cd web && pnpm typecheck` 通过。浏览器验收因 Vite 监听本地端口返回 `listen EPERM` 未完成，窄屏实际溢出待确认。

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本项目是一个教学型 Solana 数据开发示例:把 marginfi(mrgn-0.1.0)部署到 devnet,造出借贷行为,再用自己写的 indexer 把链上数据解析进 Postgres,最后用前端展示借贷池。配合 B 站合集视频使用。
+本项目对外名称是**借贷市场**(`solana-lending-market`):在 Solana devnet 上部署 marginfi,做一个能真实存借的借贷市场;从部署协议、造数据、解析链上数据、存储到前端,全部自己实现。项目配合 B 站合集视频教学。
 
 目标与进度见 `docs/00-goals.md`、`docs/progress.md`,决策记录见 `docs/decisions.md`。**开始工作前先读这三个文件,结束工作时更新 `docs/progress.md`。**
 

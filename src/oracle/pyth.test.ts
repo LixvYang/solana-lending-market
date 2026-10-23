@@ -1,4 +1,4 @@
-/** INPUT: 真实 pSOL 银行 fixture、Pyth 地址规则。 OUTPUT: PDA、feed id 换算、各类银行的价格账户断言。 POSITION: 离线测试。 SYNC: folder.md。 */
+/** INPUT: 真实 pSOL 银行 fixture、Pyth 地址规则。 OUTPUT: SOL/BTC/ETH PDA、feed id 换算、各类银行价格账户断言。 POSITION: 离线测试。 SYNC: folder.md。 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PublicKey } from '@solana/web3.js';
@@ -14,6 +14,14 @@ test('赞助价格账户 = PDA([分片 u16 LE, feed id], Pyth Push Oracle);分�
   assert.equal(pythPushAccount(`0x${FEED_IDS['SOL/USD']}`).toBase58(), SOL_USD_ACCOUNT);
   assert.notEqual(pythPushAccount(FEED_IDS['SOL/USD'], 3301).toBase58(), SOL_USD_ACCOUNT); // marginfi 自己赞助的分片
   assert.throws(() => pythPushAccount('abcd'), /32 bytes/);
+});
+
+test('BTC/ETH feed id 映射到 devnet 已核实的 shard 0 账户', () => {
+  assert.equal(FEED_IDS['BTC/USD'], 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43');
+  assert.equal(FEED_IDS['ETH/USD'], 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace');
+  assert.equal('HYPE/USD' in FEED_IDS, false);
+  assert.equal(pythPushAccount(FEED_IDS['BTC/USD']).toBase58(), '4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo');
+  assert.equal(pythPushAccount(FEED_IDS['ETH/USD']).toBase58(), '42amVS4KgzR9rA28tkVYqVXjq9Qa8dcZQMbH5EYFX6XC');
 });
 
 test('真实 pSOL 银行:oracle_keys[0] 存的是 feed id,换算后才是要传的价格账户', () => {

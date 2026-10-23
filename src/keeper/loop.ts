@@ -15,7 +15,8 @@ export async function keeperLoop(tick: () => Promise<void>, wait: (ms: number) =
   return 0;
 }
 export function intervalMs(args: string[]): number {
-  if (!args.length) return 60_000;
+  // tSOL/tUSDC 最长允许 240 秒,tHYPE 900 秒;默认 180 秒留有余量,用户交易也会顺便刷新 mock 价格。
+  if (!args.length) return 180_000;
   if (args.length !== 2 || args[0] !== '--interval' || !/^\d+$/.test(args[1])) throw Error('invalid interval');
   const seconds = Number(args[1]);
   if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400) throw Error('invalid interval');

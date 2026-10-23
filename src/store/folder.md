@@ -4,8 +4,8 @@ EP6：原始事实存储、派生解码与当前状态快照。
 
 | 文件 | 角色 | 功能 |
 |---|---|---|
-| accounts.test.ts | 测试 | context.slot、owner、raw快照重建、数据库对账 |
-| accounts.ts | 运行时 | 协议/预言机 owner 校验、context.slot 快照和原始字节 |
+| accounts.test.ts | 测试 | context.slot、owner、变化去重、游标前进、raw快照重建与数据库对账 |
+| accounts.ts | 运行时 | 协议/预言机 owner 校验、按 data 去重的 context.slot 快照、最近采样游标 |
 | db.test.ts | 测试 | 两侧 bigint 与事务连接/回滚 |
 | db.ts | 运行时 | pg/PGlite 薄适配、SQL BIGINT 统一字符串、事务 |
 | decode.test.ts | 测试 | fixture幂等、独立计数、清库重跑、升级、错误事务 |

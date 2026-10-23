@@ -1,4 +1,4 @@
-/** INPUT: 假 RPC、专用钱包、纯限流/指令解码。 OUTPUT: 水龙头离线证据。 POSITION: EP8 测试。 SYNC: folder.md。 */
+/** INPUT: 假 RPC、专用钱包、纯限流/指令解码。 OUTPUT: 水龙头离线证据(含可选 Pyth 资产)。 POSITION: EP8 测试。 SYNC: folder.md。 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Keypair, PublicKey, VersionedTransaction, SystemInstruction } from '@solana/web3.js';
@@ -81,11 +81,17 @@ test('faucet handle reads bounded JSON and uses socket IP, ignoring forwarded IP
   await handleFaucet(req as unknown as InstanceType<typeof IncomingMessage>, res as unknown as InstanceType<typeof ServerResponse>, grant);
   assert.equal(status, 400);
 });
-test('pSOL(Pyth 定价)是后加的银行:池子里有才发,没有时只发 tUSDC/tSOL;tUSDC/tSOL 缺失仍然报错', () => {
+test('Pyth 银行是可选水龙头资产:默认约 $500 一份,可按环境变量覆盖', () => {
   const m = () => Keypair.generate().publicKey.toBase58();
   const base = [{ label: 'tUSDC', mint: m(), decimals: 6 }, { label: 'tSOL', mint: m(), decimals: 9 }] as BankView[];
   assert.deepEqual(faucetGrants(base, {}).map(g => g.label), ['tUSDC', 'tSOL']);
-  const withP = faucetGrants([...base, { label: 'pSOL', mint: m(), decimals: 9 } as BankView], { FAUCET_PSOL_AMOUNT: '2.5' });
-  assert.deepEqual(withP.map(g => [g.label, g.amount]), [['tUSDC', 1_000_000_000n], ['tSOL', 10_000_000_000n], ['pSOL', 2_500_000_000n]]);
+  const py = ['pSOL', 'pBTC', 'pETH'].map((label, i) => ({ label, mint: m(), decimals: i === 0 ? 9 : 8 })) as BankView[];
+  const hype = { label: 'tHYPE', mint: m(), decimals: 8 } as BankView;
+  const withP = faucetGrants([...base, ...py, hype], {});
+  assert.deepEqual(withP.map(g => [g.label, g.amount]), [
+    ['tUSDC', 1_000_000_000n], ['tSOL', 10_000_000_000n], ['pSOL', 10_000_000_000n],
+    ['pBTC', 600_000n], ['pETH', 20_000_000n], ['tHYPE', 600_000_000n],
+  ]);
+  assert.equal(faucetGrants([...base, ...py, hype], { FAUCET_PBTC_AMOUNT: '0.01' }).find(g => g.label === 'pBTC')?.amount, 1_000_000n);
   assert.throws(() => faucetGrants([base[1]], {}), /unavailable/);
 });

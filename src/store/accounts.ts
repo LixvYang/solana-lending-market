@@ -1,7 +1,7 @@
 /**
  * INPUT: finalized 账户 RPC、Db、固定 IDL。
- * OUTPUT: snapshotAccounts / snapshotOracles、原始字节与 owner 白名单。
- * POSITION: EP6 当前状态采集；RPC 不提供历史状态，历史需逐笔快照，此处不做。SYNC: 同步 folder.md。
+ * OUTPUT: snapshotAccounts / snapshotOracles、原始字节、变化去重与采样游标。
+ * POSITION: EP6 当前状态采集；变化快照用于历史曲线，但采样间隔内的状态不保证完整。SYNC: 同步 folder.md。
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -26,6 +26,21 @@ export function accountData(raw_data: string, idl: Idl) {
   const decoded = decodeAccount(bytes, idl);
   return { type: decoded.name, data: { ...('data' in decoded ? decoded.data : decoded), raw_data } };
 }
+async function saveSnapshotBatch(db: Db, states: { address: string; account: NonNullable<AccountResponse['value'][number]>; type: string; data: Record<string, unknown> }[], slot: number) {
+  await db.transaction(async tx => {
+    for (const state of states) {
+      const data = toJson(state.data);
+      const latest = await tx.query('SELECT data = $2::jsonb AS same FROM account_states WHERE address=$1 ORDER BY slot DESC LIMIT 1', [state.address, data]);
+      if (latest.rows[0]?.same) continue;
+      await tx.query(`INSERT INTO account_states(address,slot,type,owner,lamports,data)
+        VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT(address,slot) DO NOTHING`,
+      [state.address, slot, state.type, state.account.owner, state.account.lamports, data]);
+    }
+    // 账户内容不变也代表采样前进；pool.as_of_slot 表示最新观测，而不是最后变化的账户。
+    await tx.query(`INSERT INTO ingest_cursor(name,slot) VALUES('account_snapshot',$1)
+      ON CONFLICT(name) DO UPDATE SET slot=GREATEST(ingest_cursor.slot,EXCLUDED.slot)`, [slot]);
+  });
+}
 // #region ep6-owner-check
 export async function snapshotAccounts(db: Db, rpc: AccountRpc, addresses: string[], idl = marginfiIdl, skipMissing = false): Promise<number> {
   const unique = [...new Set(addresses)];
@@ -46,11 +61,7 @@ export async function snapshotAccounts(db: Db, rpc: AccountRpc, addresses: strin
       if (account.data[1] !== 'base64') throw new Error(`unexpected account encoding ${address}`);
       return [{ address, account, ...accountData(account.data[0], idl) }];
     });
-    await db.transaction(async tx => {
-      for (const state of states) await tx.query(`INSERT INTO account_states(address, slot, type, owner, lamports, data)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb) ON CONFLICT (address, slot) DO NOTHING`,
-      [state.address, response.context.slot, state.type, state.account.owner, state.account.lamports, toJson(state.data)]);
-    });
+    await saveSnapshotBatch(db, states, response.context.slot);
     count += states.length;
   }
   return count;
@@ -91,11 +102,7 @@ export async function snapshotOracles(db: Db, rpc: AccountRpc, addresses: string
       if (!oracle) throw new Error(`unknown oracle layout ${address}`);
       return [{ address, account, ...oracle }];
     });
-    await db.transaction(async tx => {
-      for (const state of states) await tx.query(`INSERT INTO account_states(address,slot,type,owner,lamports,data)
-        VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT(address,slot) DO NOTHING`,
-      [state.address, response.context.slot, state.type, state.account.owner, state.account.lamports, toJson(state.data)]);
-    });
+    await saveSnapshotBatch(db, states, response.context.slot);
     count += states.length;
   }
   return count;

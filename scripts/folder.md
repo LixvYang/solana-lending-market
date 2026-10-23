@@ -25,9 +25,10 @@
 | faucet-setup.ts | 管理员工具 | 创建专用钱包、转 SOL 与铸币，--top-up 补充（本次未运行正常路径） |
 | price-keeper.ts | 管理员工具 | 默认 60 秒保持当前价格、更新时间，连续 5 次失败退出 |
 | set-price.ts | 管理员工具 | 精确 18 位价格改价（本次未运行正常路径） |
-| add-pyth-bank.ts | 管理员工具 | 幂等:pSOL 币、Pyth 定价银行、给兑换台铸币、写标签 |
+| add-pyth-bank.ts | 管理员工具 | 幂等:按符号新增 pSOL/pBTC/pETH 的 Pyth 银行、预置水龙头库存、写标签 |
+| fix-hype-oracle.ts | 管理员工具 | 幂等:将已部署 HYPE 银行改为 tHYPE mock 价格并写链下标签 |
 | verify-pyth-bank.ts | 链上验收 | 直接调程序:存 pSOL 借 tUSDC、存 tUSDC 借 pSOL |
-| e2e-pyth.ts | 链上验收 | 经 HTTP:SOL 换 pSOL、存、借、还清、取出 |
+| e2e-pyth.ts | 链上验收 | 经 HTTP:SOL 换 pSOL/pBTC/pETH、存、借、还清、取出 |
 | token-metadata.ts | 管理员工具 | 幂等:tSOL/tUSDC/pSOL 的 Metaplex 元数据,URI 指向 assets/tokens |
 | admin-runtime.ts | CLI 共用 | 显式读钥与签名发送，只被独立进程导入 |
 | wallet-cli.test.ts | 离线测试 | 新脚本 help/非法参数，不加载密钥或联网 |

@@ -1,4 +1,4 @@
-/** INPUT: Db。 OUTPUT: getPool / getRateCurve / getAccounts / getActivity / getXray。 POSITION: EP7 只读视图入口，无 RPC。 SYNC: 同步 folder.md。 */
+/** INPUT: Db。 OUTPUT: 池子、利率曲线、账户、历史、活动与 X 光查询。 POSITION: EP7 只读视图入口，无 RPC。 SYNC: 同步 folder.md。 */
 import type { Db } from '../store/db';
 import type { AccountView, RateCurveView, PoolView } from './types';
 import { readState, label } from './state';
@@ -6,6 +6,7 @@ import { poolView, bankFeed } from './bank';
 import { riskPrice } from './oracle-price';
 import { health, quantity, shareQuantity, floor, usd, rates, type HealthBalance } from './math';
 export function getPool(db: Db): Promise<PoolView> { return readState(db).then(poolView); }
+export { getBankHistory } from './bank-history';
 export async function getRateCurve(db: Db, address: string): Promise<RateCurveView | null> {
   const bank = (await getPool(db)).banks.find(b => b.address === address);
   if (!bank)

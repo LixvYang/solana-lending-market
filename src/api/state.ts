@@ -48,6 +48,7 @@ export interface UserData {
 }
 export interface State {
   rows: Row[];
+  sampledSlot?: string | null;
   labels: Record<string, string>;
   banks: Record<string, BankData>;
   groups: Record<string, GroupData>;
@@ -65,9 +66,19 @@ function deployedGroup(): string | null {
 }
 
 export async function readState(db: Db): Promise<State> {
-  const rows = (await db.query('SELECT DISTINCT ON (address) * FROM account_states ORDER BY address, slot DESC')).rows;
+  // DISTINCT ON 会扫描并排序全部历史快照；主键 (address, slot) 可逐个跳到地址，再索引倒序取最新一行。
+  const rows = (await db.query(`WITH RECURSIVE a(address) AS (
+    (SELECT address FROM account_states ORDER BY address LIMIT 1)
+    UNION ALL
+    SELECT (SELECT address FROM account_states WHERE address > a.address ORDER BY address LIMIT 1)
+    FROM a WHERE a.address IS NOT NULL
+  )
+  SELECT s.* FROM a CROSS JOIN LATERAL (
+    SELECT * FROM account_states x WHERE x.address = a.address ORDER BY slot DESC LIMIT 1
+  ) s ORDER BY s.address`)).rows;
   const labels = Object.fromEntries((await db.query('SELECT address,label FROM labels')).rows.map(r => [String(r.address), String(r.label)]));
-  const state: State = { rows, labels, banks: {}, groups: {}, feeds: {}, users: {} };
+  const cursor = await db.query("SELECT slot FROM ingest_cursor WHERE name='account_snapshot'");
+  const state: State = { rows, sampledSlot: cursor.rows[0] ? String(cursor.rows[0].slot) : null, labels, banks: {}, groups: {}, feeds: {}, users: {} };
   for (const row of rows) {
     const address = String(row.address), type = String(row.type), data = row.data as Record<string, unknown>;
     if ('decodeError' in data || 'rawData' in data)

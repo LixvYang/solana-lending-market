@@ -27,12 +27,37 @@ export function usdMicroOf(data: Uint8Array, owner: string, nowSeconds: bigint):
   throw new ApiError(503, '价格账户格式不认识');
 }
 
+const RATES_CACHE_MS = 15_000;
 export function oraclePrices(rpc: WalletRpc, accounts: Partial<Record<string, PublicKey>>, now = () => Date.now()): PriceReader {
-  return async asset => {
+  const keys = Object.values(accounts).filter((key): key is PublicKey => Boolean(key));
+  let cached: { until: number; infos: Awaited<ReturnType<WalletRpc['getMultipleAccountsInfo']>> } | null = null;
+  let pending: Promise<Awaited<ReturnType<WalletRpc['getMultipleAccountsInfo']>>> | null = null;
+  const readAll = async () => {
+    if (cached && cached.until > now()) return cached.infos;
+    if (pending) return pending;
+    pending = rpc.getMultipleAccountsInfo(keys, 'confirmed');
+    try {
+      const infos = await pending;
+      cached = { infos, until: now() + RATES_CACHE_MS };
+      return infos;
+    } finally { pending = null; }
+  };
+  const decode = (asset: Parameters<PriceReader>[0], info: Awaited<ReturnType<WalletRpc['getAccountInfo']>>) => {
     const account = accounts[asset.symbol];
     if (!account) throw new ApiError(503, `${asset.symbol} 没有价格来源`);
-    const info = await rpc.getAccountInfo(account, 'confirmed');
     if (!info) throw new ApiError(503, `${asset.symbol} 价格账户不存在`);
     return usdMicroOf(info.data, info.owner.toBase58(), BigInt(Math.floor(now() / 1000)));
   };
+  const read: PriceReader = async asset => {
+    const account = accounts[asset.symbol];
+    if (!account) throw new ApiError(503, `${asset.symbol} 没有价格来源`);
+    const infos = await readAll(), index = keys.findIndex(key => key.equals(account));
+    return decode(asset, infos[index] ?? null);
+  };
+  read.fresh = async asset => {
+    const account = accounts[asset.symbol];
+    if (!account) throw new ApiError(503, `${asset.symbol} 没有价格来源`);
+    return decode(asset, await rpc.getAccountInfo(account, 'confirmed'));
+  };
+  return read;
 }

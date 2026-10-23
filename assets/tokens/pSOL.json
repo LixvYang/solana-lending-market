@@ -2,17 +2,17 @@
   "name": "Pyth 定价测试 SOL",
   "symbol": "pSOL",
   "description": "价格跟随 Pyth devnet 的 SOL/USD 实时行情,用来演示真实预言机。仅限 devnet,没有任何价值。",
-  "image": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/pSOL.png",
-  "external_url": "https://github.com/LixvYang/solana-lending-indexer",
+  "image": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/pSOL.png",
+  "external_url": "https://github.com/LixvYang/solana-lending-market",
   "properties": {
     "category": "image",
     "files": [
       {
-        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/pSOL.png",
+        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/pSOL.png",
         "type": "image/png"
       },
       {
-        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/pSOL.svg",
+        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/pSOL.svg",
         "type": "image/svg+xml"
       }
     ]

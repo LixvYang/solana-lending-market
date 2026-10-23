@@ -9,9 +9,9 @@
 | service.ts | 转账 | 余额检查、幂等 ATA、专用钱包签名 |
 | server.ts | HTTP | 独立 /faucet、429/503 与 socket IP |
 | setup.ts | 管理员构造 | SOL 转账与 mint-to，仅一次性 CLI 导入 |
-| faucet.test.ts | 测试 | 三种限流、准确转账/ATA、余额不足与 setup 指令、可选 pSOL |
+| faucet.test.ts | 测试 | 三种限流、准确转账/ATA、余额不足与 setup 指令、可选 Pyth grant |
 | swap.ts | 兑换 | 原子兑换报价/转发;单价每次报价时由 PriceReader 读取 |
 | prices.ts | 定价 | 价格账户字节 → USD×1e6;Pyth 查校验级别与年龄 |
-| swap.test.ts / prices.test.ts | 测试 | 十二个方向、随价格变化的报价、过期/零价拒绝 |
+| swap.test.ts / prices.test.ts | 测试 | 七种资产两两兑换、Pyth feed 取价、随价格变化、过期/零价拒绝 |
 
 SYNC: 修改实现时同步本表、文件头部、README 与 EP8 文档。

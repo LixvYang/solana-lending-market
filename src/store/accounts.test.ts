@@ -46,3 +46,22 @@ test('wrong owner or missing account rejects the whole snapshot batch without wr
     await assert.rejects(snapshotAccounts(db, { getMultipleAccounts: async () => ({ context: { slot: 1 }, value: [null] }) }, [addresses[0]]), /missing/);
   } finally { await db.close(); }
 });
+test('unchanged account data is deduplicated while the sampled slot advances', async () => {
+  const db = pgliteDb();
+  try {
+    await migrate(db);
+    let slot = 123;
+    let snapshot = values;
+    const rpc = { getMultipleAccounts: async () => ({ context: { slot }, value: snapshot }) };
+    await snapshotAccounts(db, rpc, addresses);
+    slot = 124;
+    await snapshotAccounts(db, rpc, addresses);
+    assert.equal((await db.query('SELECT * FROM account_states')).rowCount, 7);
+    assert.equal((await db.query("SELECT slot FROM ingest_cursor WHERE name='account_snapshot'")).rows[0].slot, '124');
+    snapshot = values.map((value, i) => i === 0 ? { ...value, data: [values[1].data[0], 'base64'] as [string, 'base64'] } : value);
+    slot = 125;
+    await snapshotAccounts(db, rpc, addresses);
+    assert.equal((await db.query('SELECT * FROM account_states')).rowCount, 8);
+    assert.equal((await db.query("SELECT slot FROM ingest_cursor WHERE name='account_snapshot'")).rows[0].slot, '125');
+  } finally { await db.close(); }
+});

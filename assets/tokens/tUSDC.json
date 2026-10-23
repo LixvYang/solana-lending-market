@@ -2,17 +2,17 @@
   "name": "测试 USDC",
   "symbol": "tUSDC",
   "description": "测试稳定币,mock 价格固定 $1。剧本里被借出、被清算偿还的就是它。仅限 devnet,没有任何价值。",
-  "image": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/tUSDC.png",
-  "external_url": "https://github.com/LixvYang/solana-lending-indexer",
+  "image": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/tUSDC.png",
+  "external_url": "https://github.com/LixvYang/solana-lending-market",
   "properties": {
     "category": "image",
     "files": [
       {
-        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/tUSDC.png",
+        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/tUSDC.png",
         "type": "image/png"
       },
       {
-        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/tUSDC.svg",
+        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/tUSDC.svg",
         "type": "image/svg+xml"
       }
     ]

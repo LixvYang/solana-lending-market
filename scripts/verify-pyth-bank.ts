@@ -70,4 +70,5 @@ async function main() {
   const bank = await fetchAccount(ctx, 'bank', pSOL.bank);
   console.log(`pSOL 银行 oracle_setup=${JSON.stringify(bank.config.oracleSetup)} max_age=${bank.config.oracleMaxAge}`);
 }
-void main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+// web3.js Connection 的 websocket 订阅会让进程一直挂着(曾留下跑完却不退出的进程),跑完显式退出。
+void main().then(() => process.exit(0), error => { console.error(error instanceof Error ? error.message : error); process.exit(1); });

@@ -22,9 +22,10 @@ export const corsHeaders = { 'Content-Type': 'application/json; charset=utf-8', 
  * 跨域放行名单:浏览器页面来自哪个 Origin,就只在它属于名单时才回显它。
  * 为什么不写死 localhost:同一台机器上 `localhost` 与 `127.0.0.1` 是两个不同的 Origin,
  * 用后者打开页面时跨域请求(水龙头在另一个端口)会被浏览器拦下,而 `/api` 走同源代理看不出问题。
- * 可用环境变量 CORS_ORIGINS(逗号分隔)追加。名单之外的 Origin 得到默认值,浏览器会拒绝它。
+ * 部署时用 ALLOWED_ORIGINS(逗号分隔)指定 Vercel 域名;配置按请求读取,便于测试和单进程部署。
  */
-const ALLOWED_ORIGINS = new Set(['http://localhost:5173', 'http://127.0.0.1:5173',
-  ...(process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) ?? [])]);
+const DEFAULT_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
 export const allowOrigin = (origin: string | string[] | undefined): string =>
-  typeof origin === 'string' && ALLOWED_ORIGINS.has(origin) ? origin : 'http://localhost:5173';
+  typeof origin === 'string' && new Set([...DEFAULT_ORIGINS,
+    ...(process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) ?? [])]).has(origin)
+    ? origin : 'http://localhost:5173';

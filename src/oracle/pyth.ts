@@ -1,4 +1,4 @@
-/** INPUT: Pyth feed id(hex 或 marginfi 存在 oracle_keys[0] 里的 32 字节)。 OUTPUT: 赞助价格账户地址、程序地址常量。 POSITION: Pyth push 价格的地址规则,构建器/索引器/管理脚本共用。 SYNC: folder.md。 */
+/** INPUT: SOL/BTC/ETH Pyth feed id(hex 或 marginfi 存在 oracle_keys[0] 里的 32 字节)。 OUTPUT: feed 表、赞助价格账户地址、程序地址常量。 POSITION: Pyth push 价格的地址规则,构建器/索引器/管理脚本共用。 SYNC: folder.md。 */
 import { PublicKey } from '@solana/web3.js';
 
 /** 价格账户的 owner:Pyth Solana Receiver。marginfi 只认这个 owner(state/price.rs)。 */
@@ -8,7 +8,11 @@ export const PYTH_PUSH_ORACLE = new PublicKey('pythWSnswVUd12oZpeFP8e9CVaEqJg25g
 /** Pyth 官方赞助、持续更新的分片。marginfi 自己赞助的是 3301,devnet 上没有。 */
 export const SPONSORED_SHARD = 0;
 /** 用到的 feed id(主网与 devnet 相同)。 */
-export const FEED_IDS = { 'SOL/USD': 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' } as const;
+export const FEED_IDS = {
+  'SOL/USD': 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d',
+  'BTC/USD': 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
+  'ETH/USD': 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+} as const;
 
 // #region ep7-pyth-address
 /**

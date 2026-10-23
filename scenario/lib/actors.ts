@@ -8,6 +8,7 @@ export type Token = typeof tokens[number];
 
 // #region ep3-actors
 // 教学账户的种子公开，任何人都能签名；只用于 devnet，不能存真实资产。
+// 历史项目名参与地址派生，改动会指向链上不存在的账户。
 export function deriveKeypair(label: string): Keypair {
   const seed = createHash('sha256').update(`solana-lending-indexer/${label}`).digest();
   return Keypair.fromSeed(seed);

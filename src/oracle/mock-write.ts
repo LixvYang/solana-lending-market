@@ -28,7 +28,7 @@ export function refreshTimestampIx(program: PublicKey, feed: PublicKey, unixSeco
  * 如果这个价格账户是我们自己的 mock(密钥由 'feed/<代币>' 公开派生),返回它的密钥,否则返回 null。
  * 真正的预言机(比如 Switchboard)的价格账户没有这个密钥,也就不能这样刷新——那种情况由预言机自己负责新鲜度。
  */
-export function mockFeedSigner(feed: PublicKey, labels: readonly string[] = ['tSOL', 'tUSDC']): Keypair | null {
+export function mockFeedSigner(feed: PublicKey, labels: readonly string[] = ['tSOL', 'tUSDC', 'tHYPE']): Keypair | null {
   for (const label of labels) { const keypair = deriveKeypair(`feed/${label}`); if (keypair.publicKey.equals(feed)) return keypair; }
   return null;
 }

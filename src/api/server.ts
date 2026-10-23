@@ -1,9 +1,10 @@
-/** INPUT: Db、HTTP/JSON、可选钱包 RPC。 OUTPUT: 只读与钱包路由。 POSITION: EP7/8 HTTP 边界。 SYNC: 同步 folder.md。 */
+/** INPUT: Db、HTTP/JSON、可选钱包 RPC。 OUTPUT: 只读(含银行历史)与钱包路由。 POSITION: EP7/8 HTTP 边界。 SYNC: 同步 folder.md。 */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Db } from '../store/db';
 import { toJson } from '../store/json';
 import { decodeBase58 } from '../core/base58';
-import { getPool, getAccounts, getRateCurve, getActivity, getXray } from './queries';
+import { getPool, getAccounts, getRateCurve, getBankHistory, getActivity, getXray } from './queries';
+import { getLiquidations } from './liquidations';
 import { ApiError } from './errors';
 import { readJson, corsHeaders, allowOrigin } from './http-body';
 import { buildTransaction, PriceStale } from './builder';
@@ -18,6 +19,7 @@ export function portNumber(value: string | undefined): number {
     throw new Error('invalid PORT');
   return Number(value);
 }
+export const hostAddress = (value = process.env.HOST): string => value || '127.0.0.1';
 function address(value: string | null, width: number): string {
   try {
     if (!value || decodeBase58(value).length !== width)
@@ -75,11 +77,20 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
         const value = url.searchParams.get('limit');
         if (value !== null && !/^\d+$/.test(value))
           throw new ApiError(400, 'invalid limit');
-        body = await getActivity(db, { limit: value === null ? undefined : Number(value), before: url.searchParams.get('before') ?? undefined });
+        const bank = url.searchParams.has('bank') ? address(url.searchParams.get('bank'), 32) : undefined;
+        body = await getActivity(db, { limit: value === null ? undefined : Number(value), before: url.searchParams.get('before') ?? undefined, bank });
+        break;
+      }
+      case '/api/liquidations': {
+        const bank = url.searchParams.has('bank') ? address(url.searchParams.get('bank'), 32) : undefined;
+        body = await getLiquidations(db, { bank });
         break;
       }
       case '/api/rate-curve':
         body = await getRateCurve(db, address(url.searchParams.get('bank'), 32));
+        break;
+      case '/api/bank-history':
+        body = await getBankHistory(db, address(url.searchParams.get('bank'), 32));
         break;
       default: {
         const match = /^\/api\/tx\/([^/]+)$/.exec(url.pathname);

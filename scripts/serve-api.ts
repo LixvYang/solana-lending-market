@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import { rpcConnection } from '../src/api/wallet-rpc';
 import { pgDb } from '../src/store/db';
-import { createApiServer, portNumber } from '../src/api/server';
+import { createApiServer, hostAddress, portNumber } from '../src/api/server';
 function main() {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === '--help') {
@@ -16,7 +16,8 @@ function main() {
   const services = process.env.RPC_URL ? { rpc: rpcConnection(process.env.RPC_URL), faucetUrl: process.env.FAUCET_URL, readUserFromChain: true } : undefined;
   const server = createApiServer(db, services);
   server.on('error', () => { console.error('API server failed'); void db.close(); process.exitCode = 1; });
-  server.listen(port, '127.0.0.1', () => console.log(`API listening on http://localhost:${port}`));
+  const host = hostAddress();
+  server.listen(port, host, () => console.log(`API listening on http://${host}:${port}`));
   const stop = () => server.close(() => { void db.close(); });
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);

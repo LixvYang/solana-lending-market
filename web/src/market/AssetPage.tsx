@@ -1,14 +1,17 @@
 /** INPUT: 当前银行、池子、钱包、利率/历史与活动回调。 OUTPUT: 资产详情和操作入口。 POSITION: 市场资产页组合视图。 SYNC: 同步 folder.md。 */
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
+import { ChunkBoundary } from '../ChunkBoundary';
 import type { BankHistoryView, BankView, RateCurveView } from '@contract';
 import { fmtPct, fmtTime, fmtUsd } from '../format';
-import { RateCurve } from '../RateCurve';
 import { SourceChip, TokenIcon, tokenMeta } from '../tokens';
 import type { AccountView, SendResponse, WalletView } from '@contract';
 import { ActionForm } from '../wallet/ActionForm';
 import { marketActionFromHash } from '../Tabs';
 import { BankActivity } from './BankActivity';
-import { BankHistory } from './BankHistory';
+
+// 图表(Recharts)只在资产页用到，懒加载：首页不必先下载它(打包 gzip 约 +107 kB)。
+const BankHistory = lazy(() => import('./BankHistory').then(m => ({ default: m.BankHistory })));
+const RateCurve = lazy(() => import('../RateCurve').then(m => ({ default: m.RateCurve })));
 
 export function AssetPage({ bank, banks, mine, wallet, curve, history, historyError, onTransaction, onOpenTx, onResult, syncStatus }: {
   bank: BankView; banks: BankView[]; mine: AccountView | null; wallet: WalletView | null; curve: RateCurveView | null; history: BankHistoryView | null; historyError: string | null; onTransaction: () => void; onOpenTx: (signature: string) => void;
@@ -41,9 +44,9 @@ export function AssetPage({ bank, banks, mine, wallet, curve, history, historyEr
             <tr><td className="muted">清算线</td><td className="n">{fmtPct(bank.weights.asset_maint, 0)}</td></tr>
             <tr><td className="muted">借款权重</td><td className="n">{fmtPct(bank.weights.liability_init, 0)}</td></tr>
           </tbody></table></section>
-          {history ? <BankHistory history={history} decimals={bank.decimals} symbol={bank.label} /> : <section className="card"><h2>历史曲线</h2><p className="muted">{historyError ? `读取历史失败：${historyError}，正在重试…` : '正在读取历史数据…'}</p></section>}
+          {history ? <ChunkBoundary><Suspense fallback={<section className="card"><h2>历史曲线</h2><p className="muted">正在读取历史数据…</p></section>}><BankHistory history={history} decimals={bank.decimals} symbol={bank.label} /></Suspense></ChunkBoundary> : <section className="card"><h2>历史曲线</h2><p className="muted">{historyError ? `读取历史失败：${historyError}，正在重试…` : '正在读取历史数据…'}</p></section>}
           <section className="card"><h2>利率模型</h2>
-            {curve ? <RateCurve curve={curve} optimalUtilization={bank.curve.optimal_utilization} /> : <div className="muted">正在读取利率曲线…</div>}
+            {curve ? <ChunkBoundary><Suspense fallback={<div className="muted">正在读取利率曲线…</div>}><RateCurve curve={curve} optimalUtilization={bank.curve.optimal_utilization} /></Suspense></ChunkBoundary> : <div className="muted">正在读取利率曲线…</div>}
           </section>
           <section className="card"><h2>关于 {bank.label}</h2><p className="asset-desc">{meta.description}</p></section>
           <BankActivity bank={bank} banks={banks} refreshVersion={activityVersion} onOpen={onOpenTx} />

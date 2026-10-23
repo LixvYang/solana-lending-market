@@ -1,4 +1,6 @@
-# solana-lending-indexer
+# 借贷市场 (`solana-lending-market`)
+
+在 Solana devnet 上部署 marginfi,做一个能真实存借的借贷市场;从部署协议、造数据、解析链上数据、存储到前端,全部自己实现。
 
 用 marginfi(mrgn-0.1.0)当样本,演示 **Solana 链上数据如何一步步变成数据库里的行,再变成网页上的数字**。配套 B 站合集视频(7 集 + 可选的第 8 集)。
 
@@ -11,14 +13,15 @@
 - 一个**真实部署在 devnet 的借贷池**,和一段可重复的借贷剧本(存款、借款、改价、清算、还款)。
 - 一条**手写的解析流水线**:指令(Borsh)、事件(日志)、账户状态(`zero_copy` 布局 + I80F48 定点数),全部带测试,并用 Anchor 官方 coder 交叉校验。
 - **幂等、可回填、可重放**的 Postgres 存储:清库重跑,解码表的 md5 完全一致。
-- 一个**API 和前端**,其中的"X 光"能并排看到一笔交易的原始字节、解码结果、数据库行。
+- 一个**API 和前端**,其中的"交易详情"能并排看到一笔交易的原始字节、解码结果、数据库行。
+- 资产详情页按银行状态变化展示利用率、APR 与总量的阶梯历史曲线;API 保留每次采样 slot,相同账户内容不重复写入。
 - **钱包交互**(可选的第 8 集):连接 devnet 钱包,对借贷池存款、取款、借款、还款;有水龙头、SOL 与测试币任意互换的兑换台(按预言机价格成交),以及端到端验收脚本。价格由交易自动保鲜,不依赖后台进程。
-- **一个真实预言机的资产**(后续增补):pSOL 的价格来自 Pyth devnet 实时行情;代币有图标,并写进了链上元数据,钱包里也能显示。
+- **Pyth 实时行情资产**:pSOL、pBTC、pETH 已接入;HYPE 银行使用我们固定为 $80 的价格,由后台定时写入。网页为代币提供图标与说明。
 
 ## ⚠️ 先说清楚:价格从哪来
 
 - **tSOL / tUSDC 是"布局一致的 mock"。** 剧本要能把价格打低来演示清算,真实行情做不到;而且 Switchboard 已于 2026-09 整体关停([D-018](docs/decisions.md))。所以价格由我们写入一个**与真实 Switchboard 价格账户字节布局完全一致**的账户,marginfi 走的仍是读取 Switchboard 价格的那条代码路径。详见 [EP3](docs/chapters/ep03-protocol-and-scenario.md) 与 [D-008 / D-009](docs/decisions.md)。
-- **pSOL 是真实行情:** 价格来自 Pyth devnet 的 SOL/USD([D-019](docs/decisions.md))。
+- **Pyth 银行使用真实行情:** 价格来自 Pyth devnet 对应的 USD feed。pBTC/pETH 是测试币;HYPE 是我们定价的测试币。
 
 **除价格来源外,其余全部是真实的链上行为。**
 
@@ -78,7 +81,8 @@ pnpm exec tsx scripts/ingest.ts --backfill
 pnpm exec tsx scripts/load-labels.ts
 pnpm exec tsx scripts/verify-db.ts         # 读回对账 + 解码表 md5
 pnpm exec tsx scripts/serve-api.ts &       # 数据库里有多个池子时设 POOL_GROUP
-FAUCET_KEYPAIR=… pnpm exec tsx scripts/add-pyth-bank.ts   # 可选:加 Pyth 定价的 pSOL 银行(D-019)
+FAUCET_KEYPAIR=… pnpm exec tsx scripts/add-pyth-bank.ts   # 默认 pSOL;也可用 --symbol pBTC/pETH 新增 Pyth 银行
+pnpm exec tsx scripts/fix-hype-oracle.ts                  # 将已部署 HYPE 银行切换为 tHYPE 固定 mock 价($80)
 (cd web && pnpm install && pnpm dev)       # http://localhost:5173
 ```
 
@@ -92,9 +96,9 @@ FAUCET_KEYPAIR=… pnpm exec tsx scripts/add-pyth-bank.ts   # 可选:加 Pyth �
 
 ## 局限
 
-- **价格大多是 mock**:tSOL/tUSDC 用我们写入的价格(清算演示需要按需改价);pSOL 用 Pyth devnet 的真实 SOL/USD(D-019)。
+- **价格大多是 mock**:tSOL/tUSDC/tHYPE 用我们写入的价格(清算演示需要按需改价);pSOL/pBTC/pETH 使用 Pyth devnet 实时行情。
 - **回填只入库 finalized**;实时跟随(`--follow`)按 confirmed 乐观入库,再由终局清扫确认或删除被丢弃分叉上的交易(见 EP8)。
-- **账户状态只有快照**,没有逐笔历史状态。
+- **账户状态历史受采样记录限制**;资产曲线只展示我们采集到的状态变化与可匹配的历史价格。
 - **只解码剧本涉及的指令**,其余原样存为 `unknown`。
 - **`tail` 追不动历史**(逐 slot 一次请求),追赶请用 `--backfill`。
 - **钱包交互仅限 devnet 测试币**,水龙头限流在内存里,没有真正的防刷(见 EP8)。

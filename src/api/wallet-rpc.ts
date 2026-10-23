@@ -1,6 +1,6 @@
 /** INPUT: web3 Connection。 OUTPUT: 可注入 RPC 与等待时钟。 POSITION: M7 网络边界，无钱包/密钥加载。 SYNC: folder.md。 */
 import { Connection } from '@solana/web3.js';
-export type WalletRpc = Pick<Connection, 'getLatestBlockhash' | 'simulateTransaction' | 'getAccountInfo' | 'getMultipleAccountsInfo' | 'getProgramAccounts' | 'getSlot' | 'getBlockTime' | 'getBalance' | 'sendRawTransaction' | 'getSignatureStatuses'>;
+export type WalletRpc = Pick<Connection, 'getLatestBlockhash' | 'simulateTransaction' | 'getAccountInfo' | 'getMultipleAccountsInfo' | 'getMultipleAccountsInfoAndContext' | 'getProgramAccounts' | 'getSlot' | 'getBlockTime' | 'getBalance' | 'sendRawTransaction' | 'getSignatureStatuses' | 'getTransaction'>;
 export interface WaitClock { now(): number; sleep(ms: number): Promise<void> }
 export const realClock: WaitClock = { now: Date.now, sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) };
 export interface WalletServices {

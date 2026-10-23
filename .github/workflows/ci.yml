@@ -17,9 +17,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # pnpm test 也跑 web/src 的测试(它们导入 react 等 web 依赖),所以 web 依赖要在测试之前装好;
+      # 本机因为 web/node_modules 早已存在而看不出来(2026-10-23 CI 在 Tabs.test.ts 报 Cannot find package 'react')。
+      - run: pnpm --dir web install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm exec tsx scripts/snapshot-docs.ts --check
       - name: 前端类型检查
         working-directory: web
-        run: pnpm install --frozen-lockfile && pnpm typecheck
+        run: pnpm typecheck

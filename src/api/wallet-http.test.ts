@@ -19,10 +19,19 @@ async function http(db: Awaited<ReturnType<typeof seedApi>>, body: string | Buff
 test('wallet returns exact SPL balances, missing ATA=0, SOL/account/faucet and rejects invalid pubkey', async () => {
   const db = await seedApi(); try {
     const mint = new PublicKey(a.mints.tUSDC), wallet = new PublicKey(a.actors.bob), ata = getAssociatedTokenAddressSync(mint, wallet);
-    const svc = { ...services({ getAccountInfo: async key => key.equals(ata) ? tokenInfo(mint, wallet, 18446744073709551615n) : null }), faucetUrl: 'http://localhost:8788/faucet' };
+    let calls = 0;
+    const svc = { ...services({ getBalance: async () => { throw Error('getBalance must not be called'); }, getMultipleAccountsInfo: async keys => {
+      calls++;
+      return keys.map(key => key.equals(wallet) ? { ...feedInfo(), lamports: 123456789 }
+        : key.equals(ata) ? tokenInfo(mint, wallet, 18446744073709551615n) : null);
+    } }), faucetUrl: 'http://localhost:8788/faucet' };
     const view = await getWallet(db, svc, a.actors.bob);
+    assert.equal(calls, 1);
     assert.equal(view.sol_lamports, '123456789'); assert.equal(view.marginfi_account, a.marginfiAccounts.bob); assert.equal(view.faucet_url, svc.faucetUrl);
     assert.equal(view.tokens.find(t => t.mint === a.mints.tUSDC)?.amount, '18446744073709551615'); assert.equal(view.tokens.find(t => t.mint === a.mints.tSOL)?.amount, '0');
+    const missing = await getWallet(db, services({ getBalance: async () => { throw Error('getBalance must not be called'); },
+      getMultipleAccountsInfo: async () => [null, ...Array.from({ length: 6 }, () => null)] }), deriveKeypair('m7/fresh').publicKey.toBase58());
+    assert.equal(missing.sol_lamports, '0');
     const fresh = await getWallet(db, services(), deriveKeypair('m7/fresh').publicKey.toBase58()); assert.equal(fresh.marginfi_account, null); assert.equal(fresh.faucet_url, null);
     assert.equal((await route(db, 'GET', '/api/wallet/invalid', undefined, svc)).status, 400);
     const response = await route(db, 'GET', `/api/wallet/${a.actors.bob}`, undefined, svc); assert.equal(response.status, 200); assert.deepEqual(JSON.parse(response.body), view);
@@ -33,7 +42,10 @@ test('HTTP POST build/send 200/400/404/413/503, invalid JSON, chunk limit, 409 s
   const db = await seedApi(); try {
     const request = { action: 'deposit', wallet: a.actors.bob, bank: a.banks.tUSDC, amount: '1000000000' };
     const response = await http(db, JSON.stringify(request)); assert.equal(response.status, 200); const tx = builtTx(JSON.parse(response.body).transaction); tx.sign([deriveKeypair('bob')]);
-    assert.equal((await http(db, JSON.stringify({ transaction: Buffer.from(tx.serialize()).toString('base64') }), 'application/json', '/api/send')).status, 200);
+    const sent = await http(db, JSON.stringify({ transaction: Buffer.from(tx.serialize()).toString('base64') }), 'application/json', '/api/send');
+    assert.equal(sent.status, 200);
+    assert.equal(JSON.parse(sent.body).status, 'confirmed');
+    assert.equal(JSON.parse(sent.body).indexed, false);
     assert.equal((await http(db, 'invalid')).status, 400); assert.equal((await http(db, '{}', 'text/plain')).status, 400);
     assert.equal((await http(db, '{}')).status, 400); assert.equal((await http(db, '{}', 'application/json', '/missing')).status, 404);
     assert.equal((await http(db, Buffer.alloc(65537))).status, 413); assert.equal((await http(db, '{}', 'application/json', '/api/build', services(), '65537')).status, 413);

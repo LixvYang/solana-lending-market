@@ -43,6 +43,7 @@ export function poolView(state: State): PoolView {
   const deposits_usd = sum('total_deposits_usd'), borrows_usd = sum('total_borrows_usd');
   const slots = state.rows.map(r => BigInt(String(r.slot))), maximum = slots.length ? slots.reduce((a, b) => a > b ? a : b) : null;
   const groups = [...new Set(Object.values(state.banks).map(b => b.group))];
-  return { program: marginfiIdl.address, group: groups.length === 1 ? groups[0] : null, as_of_slot: maximum === null ? null : String(maximum), banks,
+  return { program: marginfiIdl.address, group: groups.length === 1 ? groups[0] : null,
+    as_of_slot: state.sampledSlot ?? (maximum === null ? null : String(maximum)), banks,
     totals: { deposits_usd, borrows_usd, utilization: deposits_usd === null || borrows_usd === null ? null : deposits_usd === 0 ? 0 : utilization(borrows_usd / deposits_usd) } };
 }

@@ -29,7 +29,7 @@
 
 ## 剧本步骤(固定顺序)
 
-账户全部**确定性派生**:`sha256("solana-lending-indexer/" + 标签)` 作为 ed25519 种子,不落盘密钥。标签:`alice`(出借人)、`bob`(借款人)、`carol`(清算人);两个代币 mint 和 group 也同样派生。部署者钱包(`ANCHOR_WALLET`)是 admin,并用它给三个账户转 SOL。
+账户全部**确定性派生**:`sha256("solana-lending-indexer/" + 标签)` 作为 ed25519 种子,不落盘密钥。种子中的旧项目名是历史标识,改动会改变所有派生地址,不能修改。标签:`alice`(出借人)、`bob`(借款人)、`carol`(清算人);两个代币 mint 和 group 也同样派生。部署者钱包(`ANCHOR_WALLET`)是 admin,并用它给三个账户转 SOL。
 
 | # | 步骤 | 说明 |
 |---|---|---|

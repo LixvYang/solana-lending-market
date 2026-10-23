@@ -1,4 +1,4 @@
-/** INPUT: 假 RPC、随机密钥。 OUTPUT: 兑换台的金额、十二个方向的交易结构、随预言机变化的报价、签名归属与转发守卫断言。 POSITION: 离线测试。 SYNC: folder.md。 */
+/** INPUT: 假 RPC、随机密钥。 OUTPUT: 兑换台八种资产两两兑换、随预言机变化的报价、签名归属与转发守卫断言。 POSITION: 离线测试。 SYNC: folder.md。 */
 import assert from 'node:assert/strict';
 import { createPublicKey, verify } from 'node:crypto';
 import { test } from 'node:test';
@@ -10,16 +10,20 @@ import { faucetRoute } from './server';
 import type { SwapAsset } from '../api/types';
 
 const desk = Keypair.generate(), user = Keypair.generate();
-const mint = { tSOL: Keypair.generate().publicKey, tUSDC: Keypair.generate().publicKey, pSOL: Keypair.generate().publicKey };
+const mint = { tSOL: Keypair.generate().publicKey, tUSDC: Keypair.generate().publicKey, pSOL: Keypair.generate().publicKey,
+  pBTC: Keypair.generate().publicKey, pETH: Keypair.generate().publicKey, tHYPE: Keypair.generate().publicKey };
 const SOL: PricedAsset = { symbol: 'SOL', decimals: 9, usdMicro: 50_000_000n };       // $50
 const tSOL: PricedAsset = { symbol: 'tSOL', decimals: 9, mint: mint.tSOL, usdMicro: 50_000_000n };   // $50
 const tUSDC: PricedAsset = { symbol: 'tUSDC', decimals: 6, mint: mint.tUSDC, usdMicro: 1_000_000n }; // $1
 const pSOL: PricedAsset = { symbol: 'pSOL', decimals: 9, mint: mint.pSOL, usdMicro: 104_708_908n };  // Pyth 价 $104.708908
-const by = { SOL, tSOL, tUSDC, pSOL } as const;
+const pBTC: PricedAsset = { symbol: 'pBTC', decimals: 8, mint: mint.pBTC, usdMicro: 70_000_000_000n };
+const pETH: PricedAsset = { symbol: 'pETH', decimals: 8, mint: mint.pETH, usdMicro: 3_500_000_000n };
+const tHYPE: PricedAsset = { symbol: 'tHYPE', decimals: 8, mint: mint.tHYPE, usdMicro: 80_000_000n };
+const by = { SOL, tSOL, tUSDC, pSOL, pBTC, pETH, tHYPE } as const;
 // 测试里价格由一张可改的表提供(生产环境读预言机账户,见 prices.test.ts)。
 const table = new Map(Object.values(by).map(a => [a.symbol, a.usdMicro]));
-const config: SwapConfig = { assets: [SOL, tSOL, tUSDC, pSOL], minUsdMicro: 50_000n, maxUsdMicro: 100_000_000n, // $0.05 ~ $100
-  price: async a => ({ usdMicro: table.get(a.symbol)!, source: a.symbol === 'pSOL' ? 'pyth' : 'mock' }) };
+const config: SwapConfig = { assets: Object.values(by), minUsdMicro: 50_000n, maxUsdMicro: 100_000_000n, // $0.05 ~ $100
+  price: async a => ({ usdMicro: table.get(a.symbol)!, source: a.symbol.startsWith('p') ? 'pyth' : 'mock' }) };
 const stocked = (tokenAmount = 10n ** 15n, lamports = 5_000_000_000) => fakeRpc({
   getBalance: (async () => lamports) as never,
   getAccountInfo: (async (key: PublicKey) => {
@@ -46,8 +50,8 @@ test('换出数量:统一的 USD 单价、整数运算、向下取整,不会多�
   assert.equal(notionalMicro(100_000_000n, tUSDC), 100_000_000n);     // 100 tUSDC = $100
 });
 
-// 十二个方向(四种资产两两):每个方向交易里都是"用户给出 from + 兑换台给出 to",手续费由用户付,兑换台已签、用户未签
-const AMOUNT: Record<SwapAsset, string> = { SOL: '0.5', tSOL: '0.5', tUSDC: '25', pSOL: '0.2' };
+// 每个方向交易里都是"用户给出 from + 兑换台给出 to",手续费由用户付,兑换台已签、用户未签
+const AMOUNT: Record<SwapAsset, string> = { SOL: '0.5', tSOL: '0.5', tUSDC: '25', pSOL: '0.2', pBTC: '0.001', pETH: '0.01', tHYPE: '0.01' };
 const PAIRS: [SwapAsset, SwapAsset, string][] = (Object.keys(by) as SwapAsset[]).flatMap(from =>
   (Object.keys(by) as SwapAsset[]).filter(to => to !== from).map(to => [from, to, AMOUNT[from]] as [SwapAsset, SwapAsset, string]));
 for (const [from, to, amount] of PAIRS) {
@@ -99,7 +103,9 @@ test('报价的边界:同一资产、未知资产、太小、太大、非法数�
   await assert.rejects(swapWith(stocked(10n ** 15n, 520_000_000)).quote({ wallet, from: 'tUSDC', to: 'SOL', amount: '25' }), (e: unknown) => status(e) === 503);
   assert.equal((await swapWith(stocked(10n ** 15n, 560_000_000)).quote({ wallet, from: 'tUSDC', to: 'SOL', amount: '25' })).out_amount, '500000000');
   assert.deepEqual(await swap.rates(), { assets: [{ symbol: 'SOL', decimals: 9, usd: '50', source: 'mock' }, { symbol: 'tSOL', decimals: 9, usd: '50', source: 'mock' },
-    { symbol: 'tUSDC', decimals: 6, usd: '1', source: 'mock' }, { symbol: 'pSOL', decimals: 9, usd: '104.708908', source: 'pyth' }], min_usd: '0.05', max_usd: '100' });
+    { symbol: 'tUSDC', decimals: 6, usd: '1', source: 'mock' }, { symbol: 'pSOL', decimals: 9, usd: '104.708908', source: 'pyth' },
+    { symbol: 'pBTC', decimals: 8, usd: '70000', source: 'pyth' }, { symbol: 'pETH', decimals: 8, usd: '3500', source: 'pyth' },
+    { symbol: 'tHYPE', decimals: 8, usd: '80', source: 'mock' }], min_usd: '0.05', max_usd: '100' });
 });
 
 test('汇率跟着预言机走:同一个兑换台,价格变了报价就变;读不到价格或价格为 0 时拒绝(503),不按旧价成交', async () => {
@@ -114,6 +120,21 @@ test('汇率跟着预言机走:同一个兑换台,价格变了报价就变;读�
   } finally { table.set('pSOL', pSOL.usdMicro); }
   const broken = createSwap(desk, stocked(), { ...config, price: async () => { throw Object.assign(new Error('stale'), { status: 503 }); } }, fakeClock());
   await assert.rejects(broken.quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503);
+});
+
+test('rates使用共享汇率读取器,quote强制走fresh读取当前成交价', async () => {
+  let cachedCalls = 0, freshCalls = 0;
+  const price = Object.assign(async (a: { symbol: string }) => {
+    cachedCalls++;
+    return { usdMicro: a.symbol === 'SOL' ? 50_000_000n : 1_000_000n, source: 'mock' as const };
+  }, { fresh: async (a: { symbol: string }) => {
+    freshCalls++;
+    return { usdMicro: a.symbol === 'SOL' ? 40_000_000n : 1_000_000n, source: 'mock' as const };
+  } });
+  const swap = createSwap(desk, stocked(), { ...config, assets: [SOL, tUSDC], price }, fakeClock());
+  await swap.rates(); assert.equal(cachedCalls, 2); assert.equal(freshCalls, 0);
+  const quote = await swap.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  assert.equal(quote.out_amount, '20000000'); assert.equal(freshCalls, 2); assert.equal(cachedCalls, 2);
 });
 
 test('转发守卫:用户签完的兑换交易(含 SOL 收款方向)放行;不是兑换台签的、或含别的程序的拒绝', async () => {
@@ -140,6 +161,27 @@ test('HTTP 路由:只有配置了兑换台才有 /swap/*,否则 404', async () =
   const noGrant = async () => { throw new Error('unused'); };
   assert.equal((await faucetRoute('GET', '/swap/rates', undefined, '1.1.1.1', noGrant as never)).status, 404);
   const route = await faucetRoute('GET', '/swap/rates', undefined, '1.1.1.1', noGrant as never, swapWith());
-  assert.equal(route.status, 200); assert.equal(JSON.parse(route.body).assets.length, 4);
+  assert.equal(route.status, 200); assert.equal(JSON.parse(route.body).assets.length, 7);
   assert.equal((await faucetRoute('POST', '/swap/quote', { wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tSOL', amount: '5' }, '1.1.1.1', noGrant as never, swapWith())).status, 400);
+});
+
+test('tHYPE 兑换使用固定 mock 价格 $80，而 BTC/ETH 仍按 Pyth 报价', async () => {
+  const swap = swapWith(), wallet = user.publicKey.toBase58();
+  assert.equal((await swap.quote({ wallet, from: 'tHYPE', to: 'tUSDC', amount: '1' })).out_amount, '80000000');
+  assert.equal((await swap.rates()).assets.find(a => a.symbol === 'tHYPE')?.source, 'mock');
+});
+
+// 单个资产价格故障不会拖垮整张汇率表。
+test('单个资产价格不可用时，汇率表照常返回其他资产，只把它标成不可用;涉及它的报价仍被拒', async () => {
+  const stale: SwapConfig = { ...config, price: async a => {
+    if (a.symbol === 'tHYPE') throw Object.assign(new Error('价格暂时不可用，请稍后再试。'), { status: 503 });
+    return config.price(a);
+  } };
+  const swap = createSwap(desk, stocked(), stale, fakeClock());
+  const rates = await swap.rates();
+  assert.equal(rates.assets.find(a => a.symbol === 'tUSDC')?.usd, '1');
+  assert.deepEqual(rates.assets.find(a => a.symbol === 'tHYPE'), { symbol: 'tHYPE', decimals: 8, usd: null, source: null, unavailable: '价格暂时不可用，请稍后再试。' });
+  const wallet = user.publicKey.toBase58();
+  assert.equal((await swap.quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' })).out_amount, '25000000');
+  await assert.rejects(swap.quote({ wallet, from: 'SOL', to: 'tHYPE', amount: '0.5' }));
 });

@@ -5,10 +5,13 @@ import run from '../../fixtures/m1-run.json';
 import { toRational } from '../core/fixed';
 import { seedApi } from './test-utils';
 import { getPool, getAccounts, getRateCurve } from './queries';
+import { readState } from './state';
 const bits=(v:{value:number[]})=>toRational(Uint8Array.from(v.value)).numerator;
 test('pool native totals and all user quantities match independent Anchor snapshots',async()=>{
  const db=await seedApi();try {
   const pool=await getPool(db);assert.equal(pool.banks.length,2);assert.equal(pool.as_of_slot,'101');assert.equal(pool.group,run.addresses.group);
+  await db.query("UPDATE ingest_cursor SET slot=150 WHERE name='account_snapshot'");
+  assert.equal((await getPool(db)).as_of_slot,'150');
   for(const bank of pool.banks){
    const s=(run.snapshots.banks as any)[bank.address];
    assert.equal(bank.total_deposits,String(bits(s.totalAssetShares)*bits(s.assetShareValue)/(2n**96n)));
@@ -88,4 +91,15 @@ test('POOL_GROUP 只保留指定的池子；不设置时多个 group 并存则 p
     assert.equal((await getAccounts(db)).length, 0);
     if (before === undefined) delete process.env.POOL_GROUP; else process.env.POOL_GROUP = before;
   } finally { await db.close(); }
+});
+
+test('readState returns the newest snapshot once per address', async () => {
+  const db = await seedApi();
+  try {
+    await db.query("INSERT INTO account_states(address,slot,type,owner,lamports,data) VALUES ('snapshot-a',10,'unknown','owner',1,'{}'),('snapshot-a',20,'unknown','owner',1,'{}'),('snapshot-b',15,'unknown','owner',1,'{}')");
+    const rows = (await readState(db)).rows.filter(row => String(row.address).startsWith('snapshot-'));
+    assert.deepEqual(rows.map(row => [row.address, String(row.slot)]), [['snapshot-a', '20'], ['snapshot-b', '15']]);
+  } finally {
+    await db.close();
+  }
 });

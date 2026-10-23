@@ -457,3 +457,64 @@ codex 的 M7a 离线测试通过后,接上真实 devnet(Helius)、真实 Postgre
 3. **pSOL 没有标签**(显示地址缩写、没有图标,水龙头/兑换台也找不到它),因为 `load-labels` 只导入剧本 fixture。→ `program/devnet.json` 增加 `labels`,默认导入时一并写入。
 
 修复后同一个全新 clone:回填与价格快照成功、对账通过、API 默认展示作者的池子(pSOL 走 Pyth、tSOL/tUSDC 走 mock)、12 个账户。README 新增这条"只需 RPC"的快速开始,并改正多处"Switchboard 暂时离线"的过时说法(已关停,D-018)。
+
+## D-023 前端定位：从"索引器演示"到"devnet 可用的借贷产品"(2026-10-22)
+
+**背景。** 用户希望项目在 devnet 上线后能被真实使用，前端好看、一目了然，同时便于教学。对照了 Aave(Markets、USDC 资产详情页)与 Morpho(Markets 列表、USDC/cbBTC 市场页的 Market/Rates/Risk/Activity 区块)的实际页面。Aave 的 Dashboard 与存款弹窗需要连接钱包，本次未实看，按已知设计参考。
+
+**差距(按影响排序)。**
+1. 看资产和操作资产在两个 tab:"市场"里点"存入"会跳到"存款借款",离开资产上下文。Aave 原地弹窗，Morpho 在资产页右侧吸顶面板。
+2. 交易前没有风险预览：只显示 APR,超额借款只能从模拟拿到 `RiskEngineInitRejected`。Aave 显示"健康因子 1.82 → 1.45",Morpho 实时显示 LTV / 清算 LTV。
+3. 没有资产详情页(KPI、存借信息、抵押参数、利率模型、历史、清算记录、流水)。
+4. 没有"我的仓位"总览(净资产、净 APY、健康因子、已用额度)与新手上手路径。
+
+**决定。**
+- 信息架构改为：市场(列表 → 资产详情 `#market/<符号>`)/ 我的仓位 / 兑换 / 链上数据(活动 + 交易拆解 + 清算监控)。"存款借款"tab 取消，操作表单移入资产页右侧。
+- 健康度主显示**比值** = 维持口径加权资产 ÷ 加权负债(<1 可清算，与 Aave 健康因子同义);现有 USD 差值(`health.maint`)放在说明里。理由:USD 差值 +$50 无法让用户判断离清算多远，比值可以。
+- 风险预览在前端用 `BankView.weights`、价格与用户 `AccountView.balances` 计算，只作预览;以服务端模拟结果为准，两者冲突时显示模拟结果。注意程序对 Pyth 价格用置信区间的低/高价(`src/api/math.ts` ep7-health),前端只有单一价格，pSOL 的预览会略偏乐观——界面需注明"预估"。
+- 历史曲线需后端按时间聚合;`account_states` 只在快照时刻有点，粒度取决于快照频率，动工前先核实。
+
+**执行方式。** 任务拆分写在 `docs/frontend-revamp.md`,由 Codex 逐个实现,Claude 审查(typecheck、测试、浏览器截图)后给结论并更新状态。
+
+## D-024 新增 Pyth 定价资产 pBTC / pETH / pHYPE(2026-10-22,devnet 已验证)
+
+**做法。** 沿用 D-019 的 pSOL 机制(`OracleSetup = PythPushOracle`,Pyth devnet 赞助推送 shard 0),`scripts/add-pyth-bank.ts --symbol <符号>` 参数化，参数集中在 `src/oracle/pyth-banks.ts`。三者 8 位小数(与 Solana 上常见的跨链 BTC/ETH 一致);风险参数照搬 tSOL;命名沿用 `p` 前缀 = Pyth 定价测试币。地址见 `program/devnet.json`。
+
+**`oracle_max_age = 900`(pSOL 仍为 300)。** 实测(约 22 分钟，每 15 秒读一次账户数据)更新间隔:SOL 60–243 秒;BTC 149–340 秒(推算另有约 440 秒);ETH 最长 463 秒;HYPE 262–376 秒。照搬 300 秒会让借款/取款经常因 `PriceStale` 被拒;900 秒约为观测最大间隔的 2 倍，测试网的代价只是价格可能旧几分钟。
+
+**水龙头。** 每次约 $500:0.006 pBTC、0.2 pETH、6 pHYPE(按 2026-10-22 devnet Pyth 价 BTC $84.3k、ETH $2.5k、HYPE $80.9);可用 `FAUCET_P*_AMOUNT` 覆盖。
+
+**验证。** 三个资产各 4 笔管理交易确认;`scripts/e2e-pyth.ts pBTC|pETH|pHYPE` 经真实 HTTP 接口走完兑换 → 存入 → 借 tUSDC → 还清 → 取出，全部确认(借款约 8.1 万 CU)。
+
+**顺带修复。** 管理脚本完成后因 web3.js websocket 不退出(曾留下运行 4 天的进程),改为显式退出;备货数量支持小数。
+
+**未验证。** 新币的 Metaplex 元数据未写(钱包里无名称/图标);Pyth devnet 赞助更新节奏只测了 22 分钟，长时间断更时借款/取款会被拒。
+
+## D-025 对外名称:"借贷市场"(2026-10-22)
+
+作者要求：不再把项目当作索引器展示，产品直接叫"借贷市场"。界面标题、页头、浏览器标签改为"借贷市场";副标题改为"在 Solana devnet 上存款赚息、抵押借款";页脚、链上活动说明、市场表头去掉"索引器 / 状态快照 slot"等内部说法。交易详情抽屉保留(仍是给想看底层的人的入口),只把文案从"索引器写进 Postgres"改为"存进数据库后的样子"。
+
+**后续(同日，作者决定一起改):** GitHub 仓库改名为 `LixvYang/solana-lending-market`(`gh repo rename`,本地 remote 已更新),本地目录改为 `~/code/github/rebetxin/solana-lending-market`;README、AGENTS、目标、教程与分镜的项目称呼改为"借贷市场"(T9)。**刻意保留:** `scenario/lib/actors.ts` 与测试钱包的派生种子 `solana-lending-indexer/…`——所有确定性地址都由它算出，改了就指向链上不存在的账户;数据库用户名/库名 `indexer`(只是本地凭据)。
+
+## D-026 Pyth devnet 的 HYPE 推送会长时间断更;兑换台逐资产降级(2026-10-22)
+
+**观测。** D-024 上架时 22 分钟采样里 HYPE 最长间隔 376 秒;同日晚些时候实测 HYPE 推送账户已 2,179 秒(约 36 分钟)未更新，同时 SOL/BTC/ETH 约 90 秒。Pyth 对 devnet 的赞助推送不保证各 feed 的节奏，短时间采样不足以定出上限。
+
+**影响。**
+1. 兑换台的汇率表原来对全部资产 `Promise.all`,一个过期就整表 503,连 SOL ↔ tUSDC 也换不了。→ 已改为逐资产取价(`Promise.allSettled`),过期资产 `usd = null` 并附原因，前端选择器标"价格暂不可用"、主按钮提示;涉及它的报价仍被拒。新增测试(旧实现下失败)。
+2. pHYPE 银行 `oracle_max_age = 900`,断更超过 15 分钟时，**任何持有 pHYPE 头寸的账户**做借款/取款都会因健康检查缺价而失败(不只是操作 pHYPE 本身)。未处理，见下。
+
+**未处理(待作者决定):** 前端仍把 pHYPE 标成"Pyth 实时",过期时应改为"价格过期"并在资产页说明影响;是否把 pHYPE 的 `oracle_max_age` 再放宽，或在 HYPE 推送稳定前暂停 pHYPE 存款(`lending_pool_configure_bank` 改 operational state)。
+
+## D-027 HYPE 改为自有固定价格(tHYPE),不再依赖 Pyth(2026-10-22,devnet 已验证)
+
+**原因:** D-026,Pyth devnet 的 HYPE 推送断更 36 分钟，持有该资产的账户借款/取款全部失败。作者决定 HYPE 改为固定价格、后台定时写上链;BTC、ETH 仍用 Pyth。
+
+**做法。** mrgn-0.1.0 的 `OracleSetup` 没有 `Fixed`(核对过上游 `state/price.rs`:只有 None/PythLegacy/SwitchboardV2/PythPushOracle/SwitchboardPull/StakedWithPythPush),所以沿用 tSOL/tUSDC 的 mock 价格账户:mocks 程序拥有的 Switchboard 布局账户 `feed/tHYPE`(`35JES1e18iBY9Wm3T4LCjErHM3vSbvimsHQXxXnHoCot`),价格 $80,银行改为 `SwitchboardPull(4)` 读它(`scripts/fix-hype-oracle.ts`,幂等)。`scripts/price-keeper.ts` 定时刷新时间戳;交易构建器在用户交易里也会顺便刷新，所以 keeper 停了也不会过期。
+
+**符号 pHYPE → tHYPE**(`t` = 我们定价)。只改链下标签;mint/bank 的派生种子仍是 `mint/pHYPE`、`bank/pHYPE`(地址不变)。
+
+**验证。** 三笔管理交易确认(建价格账户、写价、改预言机);回填后 `/api/pool` 显示 tHYPE `mock $80`,兑换台 7 个资产全部报价;`scripts/e2e-pyth.ts tHYPE` 走完兑换 → 存入 → 借 2 tUSDC → 还清 → 取出;隔 75 秒读价格账户，时间戳前进(keeper 在工作)。
+
+**注意:** 第一次端到端在借款步失败(`PriceStale`),因为 API 进程是改代码前启动的，签名者名单里没有 tHYPE;重启 API 后通过。**改了预言机相关代码后要重启 API、兑换台与 keeper。**价格固定意味着 tHYPE 不跟市场走，清算演示仍用 tSOL 改价。
+

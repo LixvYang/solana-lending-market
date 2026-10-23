@@ -3,25 +3,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import run from '../../fixtures/m1-run.json';
 import { seedApi } from './test-utils';
-import { route, handle, portNumber } from './server';
+import { route, handle, hostAddress, portNumber } from './server';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Db } from '../store/db';
 import { encodeBase58 } from '../core/base58';
 test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe without socket',async()=>{
  const db=await seedApi();try{
   const signature=run.steps.find(s=>s.label==='bob borrow 5000 tUSDC')!.signatures[0];
-  for(const url of ['/api/pool','/api/accounts','/api/activity?limit=2',`/api/rate-curve?bank=${run.addresses.banks.tSOL}`,`/api/tx/${signature}`,'/api/health']){
+  for(const url of ['/api/pool','/api/accounts','/api/activity?limit=2',`/api/activity?bank=${run.addresses.banks.tSOL}`,`/api/liquidations?bank=${run.addresses.banks.tSOL}`,`/api/rate-curve?bank=${run.addresses.banks.tSOL}`,`/api/bank-history?bank=${run.addresses.banks.tSOL}`,`/api/tx/${signature}`,'/api/health','/api/healthz','/healthz']){
    const result=await route(db,'GET',url);assert.equal(result.status,200);assert.equal(result.headers['Access-Control-Allow-Origin'],'http://localhost:5173');
    assert.ok(!/api-key|DATABASE_URL|RPC_URL/.test(result.body));assert.ok(JSON.parse(result.body));
   }
-  for(const url of ['/api/activity?limit=NaN','/api/activity?limit=0','/api/activity?limit=1.1','/api/activity?before=bad','/api/rate-curve','/api/rate-curve?bank=invalid','/api/tx/%ZZ'])assert.equal((await route(db,'GET',url)).status,400);
+  for(const url of ['/api/activity?limit=NaN','/api/activity?limit=0','/api/activity?limit=1.1','/api/activity?before=bad','/api/activity?bank=invalid','/api/liquidations?bank=invalid','/api/rate-curve','/api/rate-curve?bank=invalid','/api/tx/%ZZ'])assert.equal((await route(db,'GET',url)).status,400);
   for(const url of ['/missing',`/api/tx/${encodeBase58(Buffer.alloc(64,1))}`,`/api/rate-curve?bank=${encodeBase58(Buffer.alloc(32,1))}`])assert.equal((await route(db,'GET',url)).status,404);
   // 公开配置:没有钱包 RPC 时兑换台地址为 null;有则原样返回(不含 RPC 等敏感配置)。
   assert.deepEqual(JSON.parse((await route(db,'GET','/api/config')).body),{faucet_url:null});
   assert.deepEqual(JSON.parse((await route(db,'GET','/api/config',undefined,{faucetUrl:'http://localhost:8788/faucet'} as never)).body),{faucet_url:'http://localhost:8788/faucet'});
   assert.equal((await route(db,'POST','/api/pool')).status,404);assert.equal((await route(db,'OPTIONS','/api/pool')).status,204);
   const bad:Db={query:async()=>{throw Error('DATABASE_URL postgres://secret RPC_URL https://host?api-key=secret');},transaction:db.transaction};
-  const failure=await route(bad,'GET','/api/health');assert.equal(failure.status,500);assert.equal(failure.body,'{"error":"internal server error"}');
+  const failure=await route(bad,'GET','/api/healthz');assert.equal(failure.status,503);assert.equal(failure.body,'{"error":"database unavailable"}');
   await db.query("INSERT INTO raw_tx(signature,slot,tx) VALUES ('big',9223372036854775807,'{}'::jsonb)");
   await db.query("INSERT INTO instructions(signature,ix_index,slot,name,args,accounts,remaining) VALUES ('big',0,9223372036854775807,'unknown','{}','{}','[]')");
   const activity=JSON.parse((await route(db,'GET','/api/activity')).body);assert.equal(activity.items[0].slot,'9223372036854775807');
@@ -30,6 +30,9 @@ test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe with
   await handle(db,{method:'GET',url:'/api/pool'} as IncomingMessage,res as unknown as ServerResponse);
   assert.equal(status,200);assert.equal(headers['Content-Type'],'application/json; charset=utf-8');assert.equal(JSON.parse(body).banks.length,2);
   assert.equal(portNumber(undefined),8787);assert.equal(portNumber('9000'),9000);for(const p of ['0','65536','NaN','1.5',''])assert.throws(()=>portNumber(p));
+  const previousHost = process.env.HOST, previousPort = process.env.PORT;
+  try { delete process.env.HOST; delete process.env.PORT; assert.equal(hostAddress(),'127.0.0.1'); process.env.PORT='9000'; assert.equal(hostAddress(),'0.0.0.0'); process.env.HOST='10.0.0.2'; assert.equal(hostAddress(),'10.0.0.2'); }
+  finally { if(previousHost===undefined)delete process.env.HOST;else process.env.HOST=previousHost;if(previousPort===undefined)delete process.env.PORT;else process.env.PORT=previousPort; }
  }finally{await db.close();}
 });
 test('new CLI help and invalid arguments run offline; HTTP serializes actual bigint',async()=>{
@@ -51,4 +54,8 @@ test('CORS 按 Origin 匹配白名单:localhost 与 127.0.0.1 都放行,陌生 O
   assert.equal(allowOrigin('http://localhost:5173'), 'http://localhost:5173');
   assert.equal(allowOrigin('https://evil.example'), 'http://localhost:5173'); // 默认值,与来者不同,浏览器会拒绝
   assert.equal(allowOrigin(undefined), 'http://localhost:5173');
+  const previous = process.env.ALLOWED_ORIGINS;
+  process.env.ALLOWED_ORIGINS = 'https://market.example, https://preview.example';
+  try { assert.equal(allowOrigin('https://market.example'), 'https://market.example'); }
+  finally { if (previous === undefined) delete process.env.ALLOWED_ORIGINS; else process.env.ALLOWED_ORIGINS = previous; }
 });

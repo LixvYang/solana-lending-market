@@ -46,3 +46,28 @@ test('清算行的 bank 取被清算资产所在的 bank(tSOL)，数量为 null(
     assert.equal(liquidation.amount, null);
   } finally { await db.close(); }
 });
+
+test('按 bank 过滤流水；清算同时出现在抵押资产和债务资产中', async () => {
+  const db = await seedApi();
+  try {
+    const tsol = await getActivity(db, { limit: 100, bank: run.addresses.banks.tSOL });
+    const tusdc = await getActivity(db, { limit: 100, bank: run.addresses.banks.tUSDC });
+    assert.ok(tsol.items.length > 0);
+    assert.ok(tusdc.items.length > 0);
+    assert.ok(tsol.items.every(i => i.bank === run.addresses.banks.tSOL));
+    assert.ok(tusdc.items.every(i => i.bank === run.addresses.banks.tUSDC));
+    assert.ok(tsol.items.some(i => i.instruction === 'lending_account_liquidate'));
+    assert.ok(tusdc.items.some(i => i.instruction === 'lending_account_liquidate'));
+  } finally { await db.close(); }
+});
+
+// 清算里程序会对两个银行各计一次息，计息事件带 bank 字段，曾掩盖了清算事件字段名写错(assetBank vs asset_bank)。
+test('清算只靠清算事件本身的 asset_bank / liability_bank 也能按 bank 查到', async () => {
+  const db = await seedApi();
+  try {
+    await db.query(`DELETE FROM events e USING events l WHERE l.signature=e.signature AND l.ix_index=e.ix_index
+      AND l.name='LendingAccountLiquidateEvent' AND e.name<>'LendingAccountLiquidateEvent'`);
+    for (const bank of [run.addresses.banks.tSOL, run.addresses.banks.tUSDC])
+      assert.ok((await getActivity(db, { limit: 100, bank })).items.some(i => i.instruction === 'lending_account_liquidate'), bank);
+  } finally { await db.close(); }
+});

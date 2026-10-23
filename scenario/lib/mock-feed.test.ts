@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { PublicKey } from '@solana/web3.js';
-import { DISCRIMINATOR, FEED_SIZE, OFFSET, resultRegion, toFixed18, writeIx } from './mock-feed';
+import { DISCRIMINATOR, FEED_SIZE, OFFSET, mocksProgram, resultRegion, toFixed18, writeIx } from './mock-feed';
 
 // 链上真实的、从未被 crank 过的 Switchboard 账户(owner 为 Aio4g…，由 M1 剧本用 initIx 创建)。
 const real = readFileSync('fixtures/switchboard-pullfeed-uncranked.bin');
@@ -37,4 +37,9 @@ test('定点数与 write 指令编码', () => {
   assert.equal(ix.data.readUInt32LE(16), 3);
   assert.deepEqual([...ix.data.subarray(20)], [1, 2, 3]);
   assert.equal(ix.keys[0].isSigner, true);
+});
+
+test('没有本地 program/out 构建产物时读取入库的公开 devnet mocks 地址', () => {
+  assert.equal(mocksProgram('/missing/program-ids.json', 'program/devnet.json').toBase58(),
+    '3UNhKQCzvj4ZXRP7BBy25STrRAh8VMtBiKmXimGUWAt7');
 });

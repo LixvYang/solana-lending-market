@@ -8,7 +8,7 @@ const ICON = {
   unknown: <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="6" cy="6" r="4.5" /><path d="M4.8 4.8a1.3 1.3 0 112 1.1c-.5.3-.8.6-.8 1.2M6 8.7v.1" /></svg>,
   liquidatable: <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 1.8l4.6 8H1.4z" /><path d="M6 5v2.2M6 8.8v.1" /></svg>,
 };
-const TEXT: Record<AccountStatus, string> = { no_debt: '无负债', healthy: '健康', liquidatable: '可清算', unknown: '价格缺失' };
+const TEXT: Record<AccountStatus, string> = { no_debt: '无债务', healthy: '健康', liquidatable: '可清算', unknown: '价格缺失' };
 // 状态色是保留色，永远配图标 + 文字，不单靠颜色传达。
 const KIND: Record<AccountStatus, string> = { no_debt: '', healthy: 'good', liquidatable: 'crit', unknown: '' };
 
@@ -23,9 +23,9 @@ export function Accounts({ accounts, pool }: { accounts: AccountView[]; pool: Po
     : <span className="muted">—</span>;
   return (
     <div className="card">
-      <h2>账户<small>健康度 = Σ存款×价格×权重 − Σ借款×价格×权重（维持权重，USD）；小于 0 即可被清算</small></h2>
+      <h2>清算监控</h2>
       <div className="tablewrap"><table>
-        <thead><tr><th>账户</th><th>存款</th><th>借款</th><th className="n">维持健康度</th><th className="n">开仓健康度</th><th>状态</th></tr></thead>
+        <thead><tr><th>账户</th><th>存款</th><th>借款</th><th className="n">距清算金额</th><th className="n">可借余量</th><th>状态</th></tr></thead>
         <tbody>{accounts.map((a) => (
           <tr key={a.address}>
             <td><b>{a.label}</b><div className="muted mono">{short(a.address)}</div></td>

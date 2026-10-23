@@ -2,17 +2,17 @@
   "name": "测试 SOL(mock 价)",
   "symbol": "tSOL",
   "description": "剧本里的抵押品。价格由我们写进 Switchboard 布局的 mock 账户,可以随时调低来演示清算。仅限 devnet,没有任何价值。",
-  "image": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/tSOL.png",
-  "external_url": "https://github.com/LixvYang/solana-lending-indexer",
+  "image": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/tSOL.png",
+  "external_url": "https://github.com/LixvYang/solana-lending-market",
   "properties": {
     "category": "image",
     "files": [
       {
-        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/tSOL.png",
+        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/tSOL.png",
         "type": "image/png"
       },
       {
-        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens/tSOL.svg",
+        "uri": "https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens/tSOL.svg",
         "type": "image/svg+xml"
       }
     ]

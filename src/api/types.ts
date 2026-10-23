@@ -64,7 +64,7 @@ export interface BankView {
 export interface PoolView {
   program: string;
   group: string | null;
-  /** 这些账户状态快照的 slot(取自 account_states.slot 的最大值)。 */
+  /** 最近一次采样的 slot；即使账户内容未变化也会前进。 */
   as_of_slot: string | null;
   banks: BankView[];
   totals: { deposits_usd: number | null; borrows_usd: number | null; utilization: number | null };
@@ -81,6 +81,24 @@ export interface RateCurveView {
   label: string;
   points: RatePoint[];
   current: RatePoint;
+}
+
+export interface BankHistoryPoint {
+  slot: string;
+  block_time: string | null;
+  total_deposits: string;
+  total_borrows: string;
+  total_deposits_usd: number | null;
+  total_borrows_usd: number | null;
+  utilization: number;
+  lending_apr: number;
+  borrowing_apr: number;
+}
+
+export interface BankHistoryView {
+  bank: string;
+  label: string;
+  points: BankHistoryPoint[];
 }
 
 export interface BalanceView {
@@ -134,6 +152,26 @@ export interface ActivityPage {
   items: ActivityItem[];
   /** 下一页的游标(传回 before)；没有更多则为 null。 */
   next_before: string | null;
+}
+
+/** GET /api/liquidations:清算事件里的原生单位 f64 差值与健康度。 */
+export interface LiquidationItem {
+  signature: string;
+  slot: string;
+  block_time: string | null;
+  ix_index: number;
+  liquidatee_account: string;
+  liquidatee_label: string | null;
+  asset_bank: string;
+  asset_label: string | null;
+  liability_bank: string;
+  liability_label: string | null;
+  /** 没收的抵押原生单位，来自事件 f64 前后余额差。 */
+  seized_asset: number;
+  /** 偿还的债务原生单位，来自事件 f64 前后余额差。 */
+  repaid_liability: number;
+  pre_health: number;
+  post_health: number;
 }
 
 /** 交易里的一段字节：偏移、长度、含义、十六进制与解出的值。教学用。 */
@@ -241,6 +279,8 @@ export interface SendResponse {
   status: 'confirmed' | 'failed' | 'timeout';
   error: ProgramErrorView | null;
   slot: string | null;
+  /** 成功交易已同步到活动表与最新账户快照。 */
+  indexed: boolean;
 }
 
 export interface WalletTokenView {
@@ -269,20 +309,21 @@ export interface FaucetResponse {
   next_allowed_at: string;
 }
 
-/* ───────────────────────── 兑换(SOL / tSOL / tUSDC 任意两两互换) ─────────────────────────
- * 测试币是自己发行的,没有真实的 AMM 池子。兑换台是固定汇率的"原子兑换":一笔交易里同时
+/* ───────────────────────── 兑换(SOL 与池子资产任意两两互换) ─────────────────────────
+ * 测试币是自己发行的,没有真实的 AMM 池子。兑换台是按预言机报价的"原子兑换":一笔交易里同时
  * "用户把 A 转给兑换台"和"兑换台把 B 转给用户",兑换台先签名、用户再签名,要么都发生要么都不发生。
- * 手续费和账户租金由用户付,兑换台只提供资产。汇率由统一的 USD 单价推导(三者之间自洽,不会有套利环),
- * 是固定的 mock,不是市场价。
+ * 手续费和账户租金由用户付,兑换台只提供资产。统一使用 USD 单价推导汇率,不会有套利环。
  */
-export type SwapAsset = 'SOL' | 'tSOL' | 'tUSDC' | 'pSOL';
+export type SwapAsset = 'SOL' | 'tSOL' | 'tUSDC' | 'pSOL' | 'pBTC' | 'pETH' | 'tHYPE';
 
 export interface SwapAssetView {
   symbol: SwapAsset;
   decimals: number;
-  /** 单价(USD),十进制字符串;报价当时从价格账户读取。 */
-  usd: string;
-  source: OracleSource;
+  /** 单价(USD),十进制字符串;报价当时从价格账户读取。价格暂不可用(如 Pyth 断更)时为 null。 */
+  usd: string | null;
+  source: OracleSource | null;
+  /** usd 为 null 时的原因;其他资产照常报价。 */
+  unavailable?: string;
 }
 
 export interface SwapRatesView {

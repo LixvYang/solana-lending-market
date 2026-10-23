@@ -18,12 +18,19 @@ import { FEED_SIZE, OFFSET, DISCRIMINATOR } from '../../src/decoder/switchboard'
 export { FEED_SIZE, OFFSET, DISCRIMINATOR } from '../../src/decoder/switchboard';
 const PRICES = new Map<Token, number>();
 
-export function mocksProgram(): PublicKey {
-  const ids = JSON.parse(readFileSync(resolve('program/out/program-ids.json'), 'utf8'));
-  if (ids.priceOracle !== 'mock') throw new Error('marginfi 不是以 PRICE_ORACLE=mock 构建的，价格账户不会被认可');
-  return new PublicKey(ids.mocks);
+export function mocksProgram(built = resolve('program/out/program-ids.json'), deployed = resolve('program/devnet.json')): PublicKey {
+  try {
+    const ids = JSON.parse(readFileSync(built, 'utf8'));
+    if (ids.priceOracle !== 'mock') throw new Error('marginfi 不是以 PRICE_ORACLE=mock 构建的，价格账户不会被认可');
+    return new PublicKey(ids.mocks);
+  } catch (error) {
+    if (error instanceof Error && !('code' in error && error.code === 'ENOENT')) throw error;
+    const ids = JSON.parse(readFileSync(deployed, 'utf8'));
+    return new PublicKey(ids.mocks);
+  }
 }
-export const feedKeypair = (token: Token) => deriveKeypair(`feed/${token}`);
+export type MockFeedLabel = Token | 'tHYPE';
+export const feedKeypair = (token: MockFeedLabel) => deriveKeypair(`feed/${token}`);
 
 function i128(value: bigint): Buffer {
   const out = Buffer.alloc(16);

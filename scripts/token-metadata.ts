@@ -11,7 +11,7 @@ import { deriveKeypair } from '../scenario/lib/actors';
 import { createMetadataIx, decodeMetadata, metadataPda, updateMetadataIx, type TokenInfo } from '../src/metadata/metaplex';
 import { cliRpc, readKeypair, sendInstructions } from './admin-runtime';
 
-const BASE = 'https://raw.githubusercontent.com/LixvYang/solana-lending-indexer/main/assets/tokens';
+const BASE = 'https://raw.githubusercontent.com/LixvYang/solana-lending-market/main/assets/tokens';
 
 async function main() {
   if (process.argv[2] === '--help') { console.log('用法: token-metadata  (需要 ANCHOR_WALLET,仅 devnet)'); return; }

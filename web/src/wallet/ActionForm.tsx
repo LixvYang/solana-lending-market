@@ -3,104 +3,100 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { VersionedTransaction } from '@solana/web3.js';
 import type { AccountView, BankView, BuildResponse, SendResponse, WalletAction, WalletView } from '@contract';
 import { fmtPct, fmtToken, fmtUsd, toNative } from '../format';
-import { TokenPicker } from '../swap/TokenPicker';
-import { b64, chain, explorer } from './chain';
+import { previewRisk } from '../risk';
+import { b64, chain } from './chain';
+import { WalletButton } from './WalletButton';
 
-const ACTIONS: { id: WalletAction; label: string; allLabel?: string }[] = [
-  { id: 'deposit', label: '存款' }, { id: 'borrow', label: '借款' },
-  { id: 'repay', label: '还款', allLabel: '还清全部' }, { id: 'withdraw', label: '取款', allLabel: '取出全部' },
+const minNative = (a: string, b: string) => (BigInt(a) < BigInt(b) ? a : b);
+
+// label 用在分段切换与数量标题(名词);verb 用在主按钮(动作 + 数量，如"存入 5 tUSDC")。
+const ACTIONS: { id: WalletAction; label: string; verb: string }[] = [
+  { id: 'deposit', label: '存款', verb: '存入' }, { id: 'borrow', label: '借款', verb: '借出' },
+  { id: 'repay', label: '还款', verb: '还款' }, { id: 'withdraw', label: '取款', verb: '取出' },
 ];
 
-/** 从别的 tab 跳过来时预选的操作与代币;nonce 让"同一个预设再点一次"也能生效。 */
-export interface WalletPreset { action: WalletAction; bank: string; nonce: number }
-
-/** 对借贷池的操作:选动作、选资产、填数量 → 服务端构建并模拟 → 钱包签名 → 服务端转发。 */
-export function ActionForm({ banks, mine, wallet, preset, onTransaction, onOpenTx }: {
-  banks: BankView[]; mine: AccountView | null; wallet: WalletView | null; preset: WalletPreset | null; onTransaction: () => void; onOpenTx: (signature: string) => void;
+/** 固定在资产详情页内操作当前资产;本地显示风险预估,签名前由服务端模拟。 */
+export function ActionForm({ banks, bank, mine, wallet, initialAction, onTransaction, onResult, syncStatus }: {
+  banks: BankView[]; bank: BankView; mine: AccountView | null; wallet: WalletView | null; onTransaction: () => void;
+  onResult: (result: SendResponse) => void;
+  initialAction: WalletAction | null;
+  syncStatus?: string | null;
 }) {
-  const { publicKey, signTransaction } = useWallet();
+  const { connected, publicKey, signTransaction } = useWallet();
   const address = publicKey?.toBase58() ?? null;
-  const [action, setAction] = useState<WalletAction>('deposit');
-  const [bankAddress, setBankAddress] = useState<string>(banks[0]?.address ?? '');
+  const [action, setAction] = useState<WalletAction>(initialAction ?? 'deposit');
   const [amount, setAmount] = useState('');
   const [all, setAll] = useState(false);
-  const [built, setBuilt] = useState<BuildResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<SendResponse | null>(null);
-
-  useEffect(() => { if (preset) { setAction(preset.action); setBankAddress(preset.bank); setAll(false); } }, [preset]);
-  const bank = useMemo(() => banks.find((b) => b.address === bankAddress) ?? banks[0], [banks, bankAddress]);
-  useEffect(() => { setBuilt(null); setSent(null); setError(null); }, [action, bankAddress, amount, all, address]);
-
-  // 每个动作"最多能填多少":存款看钱包余额,取款看存款,还款看负债;借款由健康度决定,交给模拟去判断。
-  const position = mine?.balances.find((b) => b.bank === bank?.address);
-  const held = wallet ? wallet.tokens.find((t) => t.mint === bank?.mint)?.amount ?? '0' : null; // 还没读到钱包时不显示,免得先闪一个 0
-  const cap = action === 'deposit' ? held : action === 'withdraw' ? position?.deposit ?? '0' : action === 'repay' ? position?.borrow ?? '0' : null;
-  const native = bank && !all ? toNative(amount, bank.decimals) : null;
-  const canBuild = Boolean(address && bank && (all || (native && native !== '0')));
+  const position = mine?.balances.find((b) => b.bank === bank.address);
+  const held = wallet ? wallet.tokens.find((t) => t.mint === bank.mint)?.amount ?? '0' : null;
+  const native = toNative(amount, bank.decimals);
+  // 借款上限同时受健康度和池子剩余流动性限制;只看前者时，池子快被借空时"最大"会填出程序必拒的数。
+  const liquidity = (BigInt(bank.total_deposits) - BigInt(bank.total_borrows)).toString();
+  const riskAmount = all ? action === 'repay' ? position?.borrow ?? '0' : action === 'withdraw' ? position?.deposit ?? '0' : '0' : native ?? '0';
+  const risk = useMemo(() => {
+    try { return previewRisk(banks, mine?.balances ?? [], { action, bank: bank.address, amount: riskAmount }); }
+    catch { return null; }
+  }, [banks, mine, action, bank.address, riskAmount]);
+  const hasRiskAmount = all ? riskAmount !== '0' : native != null && BigInt(native) > 0n;
+  const cap = action === 'deposit' ? held : action === 'withdraw' ? position?.deposit ?? '0' : action === 'repay' ? position?.borrow ?? '0' : risk?.maxBorrow == null ? null : minNative(risk.maxBorrow, liquidity);
   const def = ACTIONS.find((a) => a.id === action)!;
-  const options = banks.map((b) => ({ symbol: b.label, balance: fmtToken(wallet?.tokens.find((t) => t.mint === b.mint)?.amount ?? '0', b.decimals, 4),
-    note: `存 ${fmtPct(b.lending_apr, 1)} · 借 ${fmtPct(b.borrowing_apr, 1)}` }));
+  const canBuild = Boolean(address && (all || (native && native !== '0')));
+  const health = (value: number | null, assets: number | null) => value == null ? !assets ? '—' : '∞ 无债务' : value.toFixed(2);
+  const healthClass = (value: number | null) => value == null ? '' : value < 1.1 ? 'bad-text' : value < 1.5 ? 'risk-warn' : 'good-text';
+  const capacity = risk?.after.borrowCapacityUsed;
+  const capClass = capacity == null ? '' : capacity >= 1 ? 'crit' : capacity >= 0.75 ? 'warn' : '';
+  const collateral = mine?.balances.filter((b) => b.deposit !== '0') ?? [];
 
-  const preview = async () => {
-    if (!address || !bank) return;
-    setBusy('构建并模拟交易…'); setError(null); setSent(null);
-    try { setBuilt(await chain.build({ action, wallet: address, bank: bank.address, amount: native ?? '0', all })); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); setBuilt(null); }
-    finally { setBusy(null); }
-  };
+  useEffect(() => { setAction(initialAction ?? 'deposit'); setAmount(''); setAll(false); }, [initialAction, bank.address]);
+  useEffect(() => { setError(null); }, [action, bank.address, amount, all, address]);
+
   const signAndSend = async () => {
-    if (!built || !signTransaction) return;
-    setBusy('请在钱包里确认…'); setError(null);
+    if (!address) return;
+    setBusy('构建并模拟交易…'); setError(null);
     try {
+      const built: BuildResponse = await chain.build({ action, wallet: address, bank: bank.address, amount: native ?? '0', all });
+      if (!built.simulation.ok) { setError(`模拟失败：${built.simulation.error?.message ?? '未知错误'}`); return; }
+      if (!signTransaction) { setError('当前钱包不支持交易签名'); return; }
+      setBusy('请在钱包里确认…');
       const signed = await signTransaction(VersionedTransaction.deserialize(b64.decode(built.transaction)));
       setBusy('发送并等待确认…');
       const result = await chain.send(b64.encode(signed.serialize()));
-      setSent(result);
-      if (result.status === 'confirmed') { onTransaction(); setAmount(''); } // 一确认就加速刷新,让页面尽快反映出来
+      onResult(result);
+      if (result.status === 'confirmed') { onTransaction(); setAmount(''); }
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(null); }
   };
 
-  return (
-    <div className="card">
-      <div className="seg wide" role="tablist">{ACTIONS.map((a) => (
-        <button key={a.id} role="tab" aria-selected={action === a.id} className={action === a.id ? 'on' : ''} onClick={() => { setAction(a.id); setAll(false); }}>{a.label}</button>))}</div>
-      <div className="swap-box">
-        <div className="swap-row"><span className="label">{def.label}数量</span>
-          {cap !== null && bank && <span className="muted">{action === 'deposit' ? '钱包' : action === 'withdraw' ? '已存' : '欠款'} {fmtToken(cap, bank.decimals, 4)}
-            {cap !== '0' && <button className="pill" type="button" onClick={() => { setAll(false); setAmount(fmtToken(cap, bank.decimals, bank.decimals).replace(/,/g, '')); }}>最大</button>}</span>}</div>
-        <div className="swap-row">
-          <input className="amount" inputMode="decimal" placeholder={all ? '全部' : '0'} value={all ? '' : amount} disabled={all} onChange={(e) => setAmount(e.target.value)} aria-label="数量" />
-          {bank && <TokenPicker value={bank.label} options={options} onChange={(s) => setBankAddress(banks.find((b) => b.label === s)!.address)} label="资产" />}</div>
-        <div className="swap-row muted"><span>{native && bank?.price != null ? fmtUsd(Number(native) / 10 ** bank.decimals * bank.price) : ' '}</span>
-          <span>{action === 'borrow' ? `借款 APR ${fmtPct(bank?.borrowing_apr ?? null, 2)}` : action === 'deposit' ? `存款 APR ${fmtPct(bank?.lending_apr ?? null, 2)}` : ''}</span></div>
-      </div>
-      {def.allLabel && <label className="field-row check"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> {def.allLabel}(含利息,由程序精确结算)</label>}
-      {action === 'borrow' && position && position.deposit !== '0' && (
-        <p className="hint">你在 {bank?.label} 里有存款。marginfi 里同一个代币的头寸要么是存款要么是负债,借款会先扣你的存款。想借出来,请用另一种代币做抵押。</p>)}
-      {!all && amount && !native && <p className="notice bad">数量格式不对,或小数位超过 {bank?.decimals} 位。</p>}
-      {!built && <button className="btn primary block lg" onClick={preview} disabled={!canBuild || Boolean(busy)}>{busy ?? (canBuild ? `预览${def.label}` : '输入数量')}</button>}
-      {built && (
-        <div className="preview">
-          <div><b>{built.summary}</b>{built.creates_account && <span className="muted">(同时创建你的 marginfi 账户)</span>}</div>
-          {built.simulation.ok
-            ? <div className="ok">✓ 模拟通过{built.simulation.units_consumed ? `,约 ${built.simulation.units_consumed.toLocaleString()} 计算单元` : ''}</div>
-            : <div className="bad-text">✗ 模拟失败:{built.simulation.error?.message ?? '未知错误'}{built.simulation.error?.code != null && <span className="muted"> ({built.simulation.error.name} #{built.simulation.error.code})</span>}</div>}
-          <div className="row-actions">
-            <button className="btn primary" onClick={signAndSend} disabled={!built.simulation.ok || Boolean(busy)}>{busy ?? '签名并发送'}</button>
-            <button className="btn" onClick={() => setBuilt(null)} disabled={Boolean(busy)}>修改</button>
-          </div>
-        </div>)}
-      {error && <div className="notice bad">{error}</div>}
-      {sent && (
-        <div className={`notice ${sent.status === 'confirmed' ? 'ok' : 'bad'}`}>
-          {sent.status === 'confirmed' ? '✓ 已确认' : sent.status === 'timeout' ? '⏱ 确认超时(交易可能仍会上链)' : `✗ 失败:${sent.error?.message ?? ''}`}
-          {' · '}<a href={explorer(sent.signature)} target="_blank" rel="noreferrer">Explorer</a>
-          {sent.status === 'confirmed' && <> · <button className="linkish" onClick={() => onOpenTx(sent.signature)}>用 X 光看这笔交易</button>
-            <div className="muted">索引器在 confirmed 后几秒内入库;X 光若提示找不到,稍等再点。</div></>}
-        </div>)}
+  if (!connected) return <div className="card asset-action">{syncStatus && <div className="sync-status" role="status">{syncStatus}</div>}<WalletButton /></div>;
+
+  return <div className="card asset-action">
+    {syncStatus && <div className="sync-status" role="status">{syncStatus}</div>}
+    <div className="seg wide" role="tablist">{ACTIONS.map((a) => <button key={a.id} role="tab" aria-selected={action === a.id} className={action === a.id ? 'on' : ''} onClick={() => { setAction(a.id); setAll(false); }}>{a.label}</button>)}</div>
+    <div className="swap-box">
+    <div className="swap-row"><span className="label">{def.label}数量</span>
+        <span className="muted">{action === 'deposit' ? '钱包' : action === 'withdraw' ? '已存' : action === 'repay' ? '欠款' : '最多可借'} {cap == null ? '—' : fmtToken(cap, bank.decimals, 4)}
+          {cap && cap !== '0' && <button className="pill" type="button" onClick={() => {
+            if (action === 'repay' || action === 'withdraw') { setAll(true); setAmount(''); }
+            else { setAll(false); setAmount(fmtToken(cap, bank.decimals, bank.decimals).replace(/,/g, '')); }
+          }}>最大</button>}</span></div>
+      <div className="swap-row"><input className="amount" inputMode="decimal" placeholder="0" value={all ? '全部' : amount} onChange={(e) => { setAll(false); setAmount(e.target.value); }} aria-label="数量" />
+        <span className="asset-fixed"><b>{bank.label}</b></span></div>
+      <div className="swap-row muted"><span>{native && bank.price != null ? fmtUsd(Number(native) / 10 ** bank.decimals * bank.price) : ' '}</span>
+        <span>{action === 'borrow' ? `借款 APR ${fmtPct(bank.borrowing_apr, 2)}` : action === 'deposit' ? `存款 APR ${fmtPct(bank.lending_apr, 2)}` : ''}</span></div>
     </div>
-  );
+    {action === 'borrow' && position && position.deposit !== '0' && <p className="hint">你在 {bank.label} 里有存款。借款会先扣除同资产存款;想借出其他资产，请用 {bank.label} 做抵押。</p>}
+    {!all && amount && !native && <p className="notice bad">数量格式不对,或小数位超过 {bank.decimals} 位。</p>}
+    {risk && hasRiskAmount && <section className="risk-preview" aria-label="交易后风险预估">
+      <div className="risk-health"><div><span className="label">健康因子</span><div><span className={healthClass(risk.before.healthFactor)}>{health(risk.before.healthFactor, risk.before.weightedAssetsMaintUsd)}</span> <span className="muted">→</span> <b className={healthClass(risk.after.healthFactor)}>{health(risk.after.healthFactor, risk.after.weightedAssetsMaintUsd)}</b></div></div>
+        {risk.liquidationPrice != null && collateral.length === 1 && <div className="risk-price"><span className="label">参考清算价</span><b>{fmtUsd(risk.liquidationPrice)} / {collateral[0].label}</b></div>}</div>
+      <div className="label">已用借款额度 {risk.after.borrowCapacityUsed == null ? '—' : fmtPct(risk.after.borrowCapacityUsed)}</div>
+      <div className={`meter ${capClass}`}><i style={{ width: `${Math.max(0, Math.min(100, (capacity ?? 0) * 100))}%` }} /></div>
+    </section>}
+    {error && <div className="notice bad">{error}</div>}
+    <button className="btn primary block lg" onClick={signAndSend} disabled={!canBuild || Boolean(busy) || Boolean(risk?.blocked)}>
+      {busy ?? (risk?.blocked ?? (canBuild ? `${def.verb} ${all ? '全部' : fmtToken(native ?? '0', bank.decimals, 4)} ${bank.label}` : '输入数量'))}
+    </button>
+  </div>;
 }

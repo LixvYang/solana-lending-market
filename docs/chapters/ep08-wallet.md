@@ -139,7 +139,7 @@ export function guardTransaction(input: unknown, accept: (programs: string[], si
 
 > **后续增补**(第 8 集代码定稿 `ep8-end` 之后才加的,只在 `main` 上,各集 tag 里没有):D-016 引入兑换台,D-017 改为任意两两互换,D-019 起汇率按预言机价格。
 
-水龙头免费但有限流。想要更多,或者想换成别的币,可以**兑换**——SOL、tSOL、tUSDC、pSOL 任意两两互换。测试币是我们自己发行的,没有真实的 AMM 池子,所以做成一个**原子兑换台**:一笔交易里同时有两件事——你把 A 转给兑换台、兑换台把 B 转给你。汇率不写死,按借贷池用的同一批价格账户来定(见下)。
+水龙头免费但有限流。想要更多,或者想换成别的币,可以**兑换**——SOL 与池子里已配置的测试币任意两两互换。测试币是我们自己发行的,没有真实的 AMM 池子,所以做成一个**原子兑换台**:一笔交易里同时有两件事——你把 A 转给兑换台、兑换台把 B 转给你。汇率不写死,按借贷池用的同一批价格账户来定(见下)。
 
 <!-- snippet: src/faucet/swap.ts#ep8-swap-tx -->
 ```ts
@@ -183,10 +183,10 @@ export const notionalMicro = (amountIn: bigint, from: PricedAsset): bigint => am
 ```
 <!-- /snippet -->
 
-  单价在每次报价时从链上读(`src/faucet/prices.ts`):SOL 和 pSOL 读 Pyth SOL/USD(真实行情),tSOL、tUSDC 读池子里的 mock 价格账户——**兑换价和借贷池估值永远是同一个数**。Pyth 价格超过 10 分钟没更新、或价格为 0 时拒绝报价,不按旧价成交。单笔价值 $0.05 到 $100。同一次报价用同一张价格表,SOL → tUSDC → tSOL → SOL 绕一圈只会因为向下取整略少一点点,**不会凭空变多**(没有套利环),测试里对多个起点数量验证过。
+  单价在每次报价时从链上读(`src/faucet/prices.ts`):SOL 和已配置的 Pyth 银行读对应 USD feed(真实行情),tSOL、tUSDC 读池子里的 mock 价格账户——**兑换价和借贷池估值永远是同一个数**。Pyth 价格超过 10 分钟没更新、或价格为 0 时拒绝报价,不按旧价成交。单笔价值 $0.05 到 $100。同一次报价用同一张价格表,SOL → tUSDC → tSOL → SOL 绕一圈只会因为向下取整略少一点点,**不会凭空变多**(没有套利环),测试里对多个起点数量验证过。
 - **兑换台保留 0.05 SOL。** 买入 SOL 时,兑换台的可付出数量是"余额减去 0.05 SOL",留着付代币账户租金等。
 - **转发接口只放行兑换交易。** 兑换台自己的转发接口会检查:兑换台是签名者、所有签名有效、只含 计算预算 / 系统 / 代币 / ATA 这四个程序。复用的是钱包转发接口的同一套签名检查,但程序白名单由调用方传入,**不会放宽钱包转发接口本身**。
-- **只有 SOL / pSOL 是市场价**,tSOL / tUSDC 仍是我们设的 mock 价,视频里要说明。
+- **SOL 与 Pyth 定价测试币是市场价**,tSOL / tUSDC 仍是我们设的 mock 价,视频里要说明。
 
 (2026-10-14 固定汇率版本)真实 devnet 上用界面点过三个方向:tUSDC → SOL(25 tUSDC 换 0.5 SOL)、SOL → tSOL(0.2 → 0.2)、tSOL → tUSDC(0.2 tSOL 换 10 tUSDC),预估数量与实际到账一致。
 
@@ -201,8 +201,8 @@ Switchboard 已于 2026-09 关停(D-018),devnet 上还在持续更新的真实�
 // 3. 绑定 Pyth:setup = 3(PythPushOracle),"oracle" 参数传的是 feed id(32 字节当 Pubkey),
 //    remaining account 传真正的价格账户,程序用它核对 feed id 是否一致(price.rs check_ai_and_feed_id)。
 const current = await fetchAccount(ctx, 'bank', bank.publicKey);
-if (!(current.config.oracleKeys[0] as PublicKey).equals(feedIdAsKey(FEED_IDS['SOL/USD']))) {
-  await send(ctx, 'configure oracle pSOL (Pyth)', [await ctx.program.methods.lendingPoolConfigureBankOracle(3, feedIdAsKey(FEED_IDS['SOL/USD']))
+if (!(current.config.oracleKeys[0] as PublicKey).equals(feedIdAsKey(FEED_IDS[asset.feed]))) {
+  await send(ctx, `configure oracle ${symbol} (Pyth)`, [await ctx.program.methods.lendingPoolConfigureBankOracle(3, feedIdAsKey(FEED_IDS[asset.feed]))
     .accountsStrict({ group, admin: ctx.admin.publicKey, bank: bank.publicKey })
     .remainingAccounts([{ pubkey: feed, isSigner: false, isWritable: false }]).instruction()]);
 }
@@ -216,6 +216,12 @@ if (!(current.config.oracleKeys[0] as PublicKey).equals(feedIdAsKey(FEED_IDS['SO
 - **价格不能按需打低**,所以清算演示仍用 tSOL(mock)。pSOL 用来演示"真实预言机"。
 
 `scripts/verify-pyth-bank.ts` 在 devnet 上验证了两个方向:存 pSOL 借 tUSDC(Pyth 价格作抵押)、存 tUSDC 借 pSOL(Pyth 价格作负债)。
+
+### 更多 Pyth 资产(代码增补,链上待执行)
+
+`scripts/add-pyth-bank.ts --symbol pBTC|pETH|pHYPE` 可按符号添加 Pyth 银行,默认仍是 pSOL;各资产 feed、精度与最大价格年龄集中在 `src/oracle/pyth-banks.ts`。新币统一 8 位,风险权重照搬 tSOL,`oracle_max_age` 设为 900 秒以适应实测最长约 7 分钟的赞助更新间隔。水龙头默认量约值 $500(按参考价格估算,可用 `FAUCET_PBTC_AMOUNT`、`FAUCET_PETH_AMOUNT`、`FAUCET_PHYPE_AMOUNT` 调整),兑换台读取银行当前 Pyth 账户报价。
+
+这次只完成代码与离线验收;新银行尚未由链上脚本创建,`program/devnet.json` 的新 mint/bank 地址、前端 mock 数据及钱包元数据需在后续相应步骤补齐。
 
 ## 价格保鲜:在交易里顺手刷新,前端无感(后续增补)
 
@@ -387,9 +393,9 @@ pnpm exec tsx scripts/e2e-wallet.ts
 - **仅 devnet、仅测试币。** 水龙头的限流在内存里,没有真正的防刷;没有信任代理时只看 socket IP,不信 `X-Forwarded-For`。
 - **只支持普通 SPL Token。** 不支持 Token-2022 和 staked asset 这类特殊的 remaining accounts。
 - **维护进程和改价工具并发时可能互相覆盖。** 它们都会写价格账户,可能读到旧价格后覆盖新值。如果不运行可选的维护进程,就没有这个问题。
-- **Pyth 价格我们写不了。** pSOL 的借款/取款依赖 Pyth devnet 持续更新(约 1–2 分钟一次);断更超过银行允许的 300 秒时会被拒绝,只能等(D-019)。
+- **Pyth 价格我们写不了。** Pyth 银行的借款/取款依赖 devnet 赞助账户持续更新;断更超过该银行配置的最大年龄时会被拒绝。pSOL 是 300 秒,pBTC/pETH/pHYPE 配置为 900 秒。
 - **转发超时不等于交易没上链。** 原签名可能稍后成功,不要直接重复构建。
-- **tSOL/tUSDC 的价格是 mock**(Switchboard 已关停,D-018);pSOL 是 Pyth 真实行情。
+- **tSOL/tUSDC 的价格是 mock**(Switchboard 已关停,D-018);pSOL/pBTC/pETH/pHYPE 的配置价格来自 Pyth 真实行情(新增三家银行仍待链上执行)。
 
 ## 回顾
 

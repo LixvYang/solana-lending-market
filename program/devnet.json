@@ -1,15 +1,21 @@
 {
-  "note": "作者在 devnet 上的部署(只有公开地址,不含任何密钥)。没有自己构建部署时,索引器用它识别 mock 价格账户的 owner;自己运行 build.sh 后以 program/out/program-ids.json 为准。 labels:剧本之外后加的代币(scripts/add-pyth-bank.ts),由 load-labels 一并导入。",
+  "note": "作者在 devnet 上的部署(只有公开地址,不含任何密钥)。没有自己构建部署时,索引器用它识别 mock 价格账户的 owner;自己运行 build.sh 后以 program/out/program-ids.json 为准。labels:剧本之外后加的代币(Pyth 定价的 pSOL/pBTC/pETH;自有固定价的 tHYPE,D-027)(scripts/add-pyth-bank.ts --symbol …),由 load-labels 一并导入。",
   "cluster": "devnet",
   "marginfi": "8fQDybohNdR4rNcPFs6FYpHscMRLechbyBiCqjihdgv9",
   "mocks": "3UNhKQCzvj4ZXRP7BBy25STrRAh8VMtBiKmXimGUWAt7",
   "group": "GHVn8kr8ffkk6qynGKKbZ8PAgCM8xGFR9Gnhen3xig35",
   "labels": {
     "mints": {
-      "pSOL": "bjwmjXvFypKzUwfFEp4ZraarSWsF79e72HbLftQ3z33"
+      "pSOL": "bjwmjXvFypKzUwfFEp4ZraarSWsF79e72HbLftQ3z33",
+      "pBTC": "21cLYwWgvUyy8o274jYhMSKmtMQVGbkQoau6PaSCnHUK",
+      "pETH": "4fhoQPcwf7tLwbHT1kUqAzje4vhpVGcduxhoRwbBSZvs",
+      "tHYPE": "F3nzz3p8L6maUBs8kmS4xi7Jzbiu9DP1z8aFXye1JKGs"
     },
     "banks": {
-      "pSOL": "D77PE9gnPYQD16kwDFSHgXfReA8Ud133PF3bKVfPr4pN"
+      "pSOL": "D77PE9gnPYQD16kwDFSHgXfReA8Ud133PF3bKVfPr4pN",
+      "pBTC": "96YbFnubhTuipauMm7K9yUuZbnVtiVaG2ywh8gNSqFgo",
+      "pETH": "8SrSgi5EXVme1ayntfXEfKKTnPzMRBroG6o26ue2KEw8",
+      "tHYPE": "H3eVeTmiHAP3jhd46ubVxVf58nMhQK4dJ2ScFFTtDRaE"
     }
   }
 }

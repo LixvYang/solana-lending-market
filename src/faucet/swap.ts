@@ -19,7 +19,11 @@ export interface SwapAssetConfig {
 /** 带上当时单价的资产:USD × 1e6(整数),例如 $50 = 50_000_000n。 */
 export type PricedAsset = SwapAssetConfig & { usdMicro: bigint };
 /** 报价时的单价从哪来。兑换台不自己定价:每个资产读它在借贷池里用的同一个价格账户(prices.ts)。 */
-export type PriceReader = (asset: SwapAssetConfig) => Promise<{ usdMicro: bigint; source: OracleSource }>;
+export interface PriceReader {
+  (asset: SwapAssetConfig): Promise<{ usdMicro: bigint; source: OracleSource }>;
+  /** 报价要绕过汇率表缓存,确保签名交易按此刻链上价格计算。 */
+  fresh?: PriceReader;
+}
 export interface SwapConfig { assets: SwapAssetConfig[]; price: PriceReader; minUsdMicro: bigint; maxUsdMicro: bigint; /** 兑换台至少保留的 SOL(付 ATA 租金等)。 */ keepLamports?: bigint }
 
 // #region ep8-swap-math
@@ -45,7 +49,7 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
   const allowed = new Set([ComputeBudgetProgram.programId, SystemProgram.programId, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID].map(p => p.toBase58()));
   const keep = config.keepLamports ?? 50_000_000n; // 兑换台至少留 0.05 SOL
   const priced = async (a: SwapAssetConfig): Promise<PricedAsset> => {
-    const { usdMicro } = await config.price(a);
+    const { usdMicro } = await (config.price.fresh ?? config.price)(a);
     if (usdMicro <= 0n) throw new ApiError(503, `${a.symbol} 价格暂时不可用，请稍后再试。`);
     return { ...a, usdMicro };
   };
@@ -59,8 +63,13 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
 
   return {
     async rates(): Promise<SwapRatesView> {
-      const assets = await Promise.all(config.assets.map(async a => ({ a, p: await config.price(a) })));
-      return { assets: assets.map(({ a, p }) => ({ symbol: a.symbol, decimals: a.decimals, usd: ui(p.usdMicro, 6), source: p.source })),
+      // 逐个资产取价，单个预言机暂不可用不应拖垮其他资产的报价。
+      const settled = await Promise.allSettled(config.assets.map(a => config.price(a)));
+      return { assets: config.assets.map((a, i) => {
+        const r = settled[i];
+        return r.status === 'fulfilled' ? { symbol: a.symbol, decimals: a.decimals, usd: ui(r.value.usdMicro, 6), source: r.value.source }
+          : { symbol: a.symbol, decimals: a.decimals, usd: null, source: null, unavailable: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+      }),
         min_usd: ui(config.minUsdMicro, 6), max_usd: ui(config.maxUsdMicro, 6) };
     },
 

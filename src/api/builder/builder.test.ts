@@ -156,6 +156,7 @@ test('不能刷新的才报 PriceStale(且文案不提内部细节):没有价格
     assert.equal(mockFeedSigner(Keypair.generate().publicKey), null);
     assert.ok(mockFeedSigner(new PublicKey(a.feeds.tSOL)));
     assert.ok(mockFeedSigner(new PublicKey(a.feeds.tUSDC)));
+    assert.ok(mockFeedSigner(deriveKeypair('feed/tHYPE').publicKey));
   } finally { await db.close(); }
 });
 test('simulation failure still returns transaction; custom IDL translations, unknown, sanitized logs', async () => {

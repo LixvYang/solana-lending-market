@@ -1,11 +1,11 @@
 {
-  "name": "solana-lending-indexer",
+  "name": "solana-lending-market",
   "private": true,
   "type": "commonjs",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"scenario/**/*.test.ts\" \"src/**/*.test.ts\" \"scripts/*.test.ts\"",
+    "test": "node --import tsx --test \"scenario/**/*.test.ts\" \"src/**/*.test.ts\" \"scripts/*.test.ts\" \"web/src/**/*.test.ts\"",
     "scenario": "tsx scenario/run.ts",
     "transfer-sol": "tsx scripts/transfer-sol.ts",
     "migrate": "node --import tsx scripts/migrate.ts",

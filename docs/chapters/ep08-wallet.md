@@ -156,14 +156,10 @@ if (to.mint) {
 const block = await rpc.getLatestBlockhash('confirmed');
 const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: block.blockhash, instructions }).compileToV0Message());
 tx.sign([desk]);
-const message = tx.message.serialize().toString('base64');
-quoted.set(message, { wallet: wallet.toBase58(), from: { symbol: from.symbol, amount: String(amountIn), decimals: from.decimals },
-  to: { symbol: to.symbol, amount: String(out), decimals: to.decimals } });
-if (quoted.size > 200) quoted.delete(quoted.keys().next().value!);
 ```
 <!-- /snippet -->
 
-> **后续增补**(`ep8-end` 之后，见 `docs/frontend-revamp.md` 的 T16):报价时把"谁、卖出什么、买入什么"记进 `quoted`,交易确认后写入 `desk_events`,用于"我的仓位"页的历史记录。兑换不经过 marginfi,索引器不会收录它，所以由兑换台自己记;`quoted` 只保留最近 200 条，防止内存无限增长。
+> **后续增补**(`ep8-end` 之后，见 `docs/frontend-revamp.md` 的 T16):兑换确认后，兑换台把这笔记进 `desk_events`,用于"我的仓位"页的历史记录。兑换不经过 marginfi,索引器不会收录它，所以由兑换台自己记。记录内容从提交上来的交易字节里解析(`swapLegs`):不调用 RPC,也不依赖报价时的内存状态，兑换台重启或多实例部署都不会漏记;数量可信，因为消息体带兑换台签名，改一个字节交易就发不出去。
 
 几个关键点:
 

@@ -200,3 +200,22 @@ test('单个资产价格不可用时，汇率表照常返回其他资产，只�
   assert.equal((await swap.quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' })).out_amount, '25000000');
   await assert.rejects(swap.quote({ wallet, from: 'SOL', to: 'tHYPE', amount: '0.5' }));
 });
+
+// 报价放在内存里时，兑换台在报价与提交之间重启、或云上多实例(报价落 A、提交落 B)就会漏记。
+// 改为从提交上来的交易本身解析两侧转账：不需要内存状态，也不调用 RPC。
+test('报价与提交落在不同的兑换台实例上，仍按交易本身记录两侧数量(SOL↔代币、代币↔代币)', async () => {
+  for (const [from, to, amount, expected] of [
+    ['SOL', 'tUSDC', '0.5', [{ symbol: 'SOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '25000000', decimals: 6 }]],
+    ['pSOL', 'tUSDC', '0.5', [{ symbol: 'pSOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '52354454', decimals: 6 }]],
+    ['tUSDC', 'SOL', '25', [{ symbol: 'tUSDC', amount: '25000000', decimals: 6 }, { symbol: 'SOL', amount: '500000000', decimals: 9 }]],
+  ] as const) {
+    const quoting = createSwap(desk, stocked(), config, fakeClock());
+    const records: unknown[][] = [];
+    const submitting = createSwap(desk, stocked(), config, fakeClock(), async (...args) => { records.push(args); });
+    const quote = await quoting.quote({ wallet: user.publicKey.toBase58(), from, to, amount });
+    const signed = VersionedTransaction.deserialize(Buffer.from(quote.transaction, 'base64')); signed.sign([user]);
+    const sent = await submitting.submit({ transaction: Buffer.from(signed.serialize()).toString('base64') });
+    assert.equal(sent.status, 'confirmed');
+    assert.deepEqual(records[0], [sent.signature, user.publicKey.toBase58(), ...expected], `${from}→${to}`);
+  }
+});

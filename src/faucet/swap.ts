@@ -1,6 +1,6 @@
 /** INPUT: 专用钱包、RPC、资产配置与报价时读取的 USD 单价。 OUTPUT: 兑换报价(兑换台已签名的交易)与受限转发。 POSITION: 兑换台,只提供资产、不垫付 SOL 手续费。 SYNC: folder.md。 */
-import { ComputeBudgetProgram, Keypair, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { ComputeBudgetProgram, Keypair, PublicKey, SystemInstruction, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, TokenInstruction, createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction, decodeTransferInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { ApiError } from '../api/errors';
 import { guardTransaction, submitSigned } from '../api/send';
 import { tokenBalance } from '../api/wallet';
@@ -46,11 +46,35 @@ const ui = (native: bigint, decimals: number) => {
   return `${native / base}${fraction ? `.${fraction}` : ''}`;
 };
 
+/**
+ * 从兑换交易本身读出"谁卖出什么、换到什么"。交易字节是用户提交上来的，在本机解码，不调用 RPC;
+ * 也不依赖报价时的内存状态——兑换台重启或云上多实例(报价落 A、提交落 B)都不会漏记。
+ * 数量可信：消息体上有兑换台的签名，改动任何字节都会使签名失效、交易发不出去。
+ * SPL 转账指令只带源/目标账户，不带 mint:用"钱包 + mint"在本地算 ATA 去比对，得到是哪种币。
+ */
+export function swapLegs(tx: VersionedTransaction, desk: PublicKey, assets: SwapAssetConfig[]): { wallet: string; from: DeskLeg; to: DeskLeg } | null {
+  const message = TransactionMessage.decompile(tx.message), wallet = message.payerKey;
+  const legs: { sender: PublicKey; asset: SwapAssetConfig; amount: bigint }[] = [];
+  for (const ix of message.instructions) {
+    if (ix.programId.equals(SystemProgram.programId) && SystemInstruction.decodeInstructionType(ix) === 'Transfer') {
+      const t = SystemInstruction.decodeTransfer(ix), sol = assets.find(a => !a.mint);
+      if (sol) legs.push({ sender: t.fromPubkey, asset: sol, amount: BigInt(t.lamports) });
+    } else if (ix.programId.equals(TOKEN_PROGRAM_ID) && ix.data[0] === TokenInstruction.Transfer) {
+      const t = decodeTransferInstruction(ix), owner = t.keys.owner.pubkey;
+      const asset = assets.find(a => a.mint && getAssociatedTokenAddressSync(a.mint, owner).equals(t.keys.source.pubkey));
+      if (asset) legs.push({ sender: owner, asset, amount: BigInt(t.data.amount) });
+    }
+  }
+  const sold = legs.find(l => l.sender.equals(wallet)), bought = legs.find(l => l.sender.equals(desk));
+  if (!sold || !bought) return null;
+  const leg = (l: typeof sold): DeskLeg => ({ symbol: l.asset.symbol, amount: String(l.amount), decimals: l.asset.decimals });
+  return { wallet: wallet.toBase58(), from: leg(sold), to: leg(bought) };
+}
+
 export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, clock: WaitClock = realClock,
   record?: (signature: string, wallet: string, from: DeskLeg, to: DeskLeg) => Promise<void>) {
   const allowed = new Set([ComputeBudgetProgram.programId, SystemProgram.programId, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID].map(p => p.toBase58()));
   const keep = config.keepLamports ?? 50_000_000n; // 兑换台至少留 0.05 SOL
-  const quoted = new Map<string, { wallet: string; from: DeskLeg; to: DeskLeg }>();
   const priced = async (a: SwapAssetConfig): Promise<PricedAsset> => {
     const { usdMicro } = await (config.price.fresh ?? config.price)(a);
     if (usdMicro <= 0n) throw new ApiError(503, `${a.symbol} 价格暂时不可用，请稍后再试。`);
@@ -102,10 +126,6 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
       const block = await rpc.getLatestBlockhash('confirmed');
       const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: block.blockhash, instructions }).compileToV0Message());
       tx.sign([desk]);
-      const message = tx.message.serialize().toString('base64');
-      quoted.set(message, { wallet: wallet.toBase58(), from: { symbol: from.symbol, amount: String(amountIn), decimals: from.decimals },
-        to: { symbol: to.symbol, amount: String(out), decimals: to.decimals } });
-      if (quoted.size > 200) quoted.delete(quoted.keys().next().value!);
       // #endregion
       return { transaction: Buffer.from(tx.serialize()).toString('base64'), last_valid_block_height: block.lastValidBlockHeight,
         from: from.symbol, to: to.symbol, in_amount: String(amountIn), in_decimals: from.decimals, out_amount: String(out), out_decimals: to.decimals,
@@ -116,11 +136,10 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
     async submit(input: unknown): Promise<SendResponse> {
       const { bytes, signature } = guardTransaction(input,
         (used, signers) => signers.includes(desk.publicKey.toBase58()) && used.every(p => allowed.has(p)), 'not a swap transaction');
-      const tx = VersionedTransaction.deserialize(bytes), intent = quoted.get(tx.message.serialize().toString('base64'));
       const result = await submitSigned(bytes, signature, rpc, clock);
-      if (result.status === 'confirmed' && record && intent) try { await record(signature, intent.wallet, intent.from, intent.to); }
+      const legs = result.status === 'confirmed' && record ? swapLegs(VersionedTransaction.deserialize(bytes), desk.publicKey, config.assets) : null;
+      if (legs) try { await record!(signature, legs.wallet, legs.from, legs.to); }
       catch { console.error('desk history write failed'); }
-      if (intent) quoted.delete(tx.message.serialize().toString('base64'));
       return result;
     },
   };

@@ -11,6 +11,7 @@ import { oraclePrices } from '../src/faucet/prices';
 import { FEED_IDS, pythPushAccount } from '../src/oracle/pyth';
 import { nativeAmount } from '../src/faucet/config';
 import { insertDeskEvent } from '../src/store/desk-events';
+import { createFaucetReservations } from '../src/store/faucet-reservations';
 import { PublicKey } from '@solana/web3.js';
 import { serviceKeypair, cliRpc } from './admin-runtime';
 async function main() {
@@ -31,8 +32,9 @@ async function main() {
   const swap = createSwap(payer, rpc, { assets, price: oraclePrices(rpc, oracles),
     minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') }, undefined,
     (signature, wallet, from, to) => insertDeskEvent(db, { signature, wallet, kind: 'swap', from, to, status: 'confirmed' }));
+  const reservations = createFaucetReservations(db);
   const server = createFaucetServer(createFaucet(payer, rpc, grants, windowHours(process.env.FAUCET_WINDOW_HOURS), windowMax(process.env.FAUCET_WINDOW_MAX), minimumSol(process.env.FAUCET_MIN_SOL), undefined,
-    (signature, wallet, details) => insertDeskEvent(db, { signature, wallet, kind: 'faucet', details, status: 'confirmed' })), swap,
+    (signature, wallet, details) => insertDeskEvent(db, { signature, wallet, kind: 'faucet', details, status: 'confirmed' }), reservations), swap,
     async () => { await db.query('SELECT 1'); }, proxyHops(process.env.TRUST_PROXY_HOPS));
   server.on('error', () => { console.error('faucet server failed'); void db.close(); process.exitCode = 1; });
   const host = hostAddress();

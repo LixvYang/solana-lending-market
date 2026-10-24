@@ -15,7 +15,7 @@
 | `PG_POOL_MAX` | 全部 | 每个进程连接池上限，默认 5。四个进程合计最多 20 条连接；连接数较紧时按实例数调低 |
 | `RPC_URL` | faucet、keeper、ingest；API 可选 | Solana devnet RPC。API 不设时只读数据仍可用，钱包接口不可用 |
 | `FAUCET_SECRET_KEY` | faucet | 专用水龙头密钥，JSON 数组或 base58；与 `FAUCET_KEYPAIR` 文件路径二选一 |
-| `FAUCET_WINDOW_HOURS` / `FAUCET_WINDOW_MAX` | faucet | 滑动时段长度与全站成功预留上限，默认 5 小时 / 30 次；状态在内存，进程重启或多副本之间不共享 |
+| `FAUCET_WINDOW_HOURS` / `FAUCET_WINDOW_MAX` | faucet | 滑动时段长度与全站预留上限，默认 5 小时 / 30 次；状态写入数据库，在重启和多副本间共享 |
 | `FAUCET_MIN_SOL` | faucet | 领取前的最低 SOL 余额，默认 0.2 SOL；低于 1 SOL 会限频告警 |
 | `TRUST_PROXY_HOPS` | faucet | 可信代理跳数，默认 0；Railway 设置为 1，其他平台按实际代理追加的 XFF 跳数设置 |
 | `KEEPER_SECRET_KEY` | keeper | 专用 keeper 密钥，JSON 数组或 base58；与 `KEEPER_KEYPAIR` 文件路径二选一 |
@@ -92,3 +92,48 @@ Compose 启动后，API 在 8787、兑换台/水龙头在 8788 监听；生产�
 | **合计** | | **约 210** |
 
 免费额度 100 万/月，后台(ingest + keeper)约 21 万，剩约 79 万 ≈ **3,700 次会话/月(约 120 次/天)**。余额轮询占六成;如果视频带来集中流量，最省事的一步是把轮询从 15 秒放宽到 30 秒(会话消耗降到约 150)。
+
+## Vercel + Supabase 全免费部署
+
+这条路径在一个 Vercel Hobby 项目里同时发布 `web/` 静态前端与根目录 `api/main.ts` Node 函数(`vercel.json` 把 `/api/*` 改写到它，原路径经 `__path` 参数还原;非 Next.js 项目的 `[...path]` 只匹配一段路径)；Supabase Free 提供 Postgres。它不运行常驻 keeper/ingest：mock 价格由用户借款/取款交易顺带刷新，按请求跟随链上新交易。容器与常驻主机部署仍可照上文使用。
+
+在 Vercel 项目选择 Hobby 计划、仓库根目录，使用根目录 `vercel.json` 的安装/构建设置。设置以下环境变量：
+
+| 变量 | 值与用途 |
+|---|---|
+| `DATABASE_URL` | Supabase **Transaction pooler** URI，要求 SSL；函数池默认 `PG_POOL_MAX=1` |
+| `PG_POOL_MAX` | 可选连接池上限，Vercel 建议 `1`，限制 Supabase Free 的并发连接 |
+| `RPC_URL` | Helius devnet RPC |
+| `POOL_GROUP` | 要展示的 marginfi group 地址 |
+| `VITE_API_BASE` | 留空；前端和 API 同源，通过 `/api` 路径访问 |
+| `FAUCET_SECRET_KEY` | 专用水龙头钱包 JSON 数组或 base58；只放少量 SOL 与测试币，不用管理员密钥 |
+| `FAUCET_URL` | `/api/desk/faucet`，同源相对路径；`/api/desk/*` 会在函数里转给兑换台/水龙头处理器 |
+| `CRON_SECRET` | 随机长字符串；Vercel Cron 用 `Authorization: Bearer ...` 调用每日同步端点 |
+| `TRUST_PROXY_HOPS` | 建议先设 `1`；Vercel 的 X-Forwarded-For 追加跳数**待验证**，需按实际请求头核对，不能信最左边的客户端值 |
+| `FAUCET_WINDOW_HOURS` / `FAUCET_WINDOW_MAX` | 滑动窗口长度/全站预留数，默认 5 小时 / 30 次 |
+| `FAUCET_MIN_SOL` | 余额低于此值时停止发放，默认 0.2 SOL |
+| `SWAP_MIN_USD` / `SWAP_MAX_USD` | 兑换区间，默认 $0.05–$100 |
+
+Vercel 不运行迁移。先在本地用 Supabase **Session pooler** URI 执行迁移；会话级迁移 advisory lock 不能通过 Transaction pooler 使用：
+
+```bash
+DATABASE_URL="$SUPABASE_SESSION_URL" pnpm exec tsx scripts/migrate.ts
+```
+
+如需从现有数据库迁移数据，先在空的 Supabase 项目上完成上面的 schema 迁移，再导出现有库的数据并恢复到 Supabase Session pooler。不要覆盖 `schema_migrations`，它由目标库的迁移命令维护：
+
+```bash
+pg_dump "$SOURCE_DATABASE_URL" --data-only --format=custom --no-owner --no-acl \
+  --exclude-table-data=schema_migrations --file=market-data.dump
+pg_restore --data-only --no-owner --no-acl --dbname="$SUPABASE_SESSION_URL" market-data.dump
+```
+
+第一次部署后确认 `/api/healthz` 返回成功，并在 Supabase 中核对 `schema_migrations` 已包含 `006_vercel_runtime.sql`。API 首次被访问时会按需跟随新交易，不替代历史全量回填；如需已有历史图表，先从可访问的源数据库导入数据。
+
+每个普通 `/api/*` 或 `/api/desk/*` 请求会通过 `waitUntil` 尝试排队一次后台同步。数据库状态行原子分配 60 秒租约，30 秒内最多启动一次 `followOnce`；它包含签名查询、必要时解码和快照、以及有待确认交易时的终局清扫。请求本身立即使用当前数据库结果，不等待同步；新交易在后台处理完成后的后续读取中出现。无人访问时不会持续跟随，Vercel 每日 Cron 只做一次低频同步并避免 Supabase Free 因 7 天无活动暂停。
+
+`faucet_reservations` 把 T20 的滑动窗口、钱包 10 分钟与 IP 每小时 5 次规则共享到所有函数实例；预留在转账前持久化，后续链上失败仍占名额。限额在容器模式也使用这张表。限流记录会在新预留时按当前窗口清理。
+
+只有成功的公共 GET 响应(市场、账户、活动、银行历史/利率、配置、兑换汇率和水龙头名额)带 `public, s-maxage=5, stale-while-revalidate=10`。钱包接口、POST 与错误响应不缓存。`regions` 不写死在配置中；部署时应在 Vercel 选择靠近 Supabase 数据库的函数区域，以减少 Transaction pooler 往返延迟。
+
+部署假设：`api/` 入口及其相对导入的 TypeScript/IDL JSON 会由 Vercel Node builder 打包；Claude 会在预览部署时用 `vercel build` 核实。Vercel/Hobby 真实运行、Supabase pooler 与平台代理跳数仍待联调。

@@ -19,6 +19,7 @@ EP7 只读数据库视图与 M7 钱包构建/转发/查询。只读路由只读 
 | xray.ts | X 光 | 原始 top/inner 指令、base64 日志和数据库原始行 |
 | errors.ts | HTTP | 可公开的固定错误与状态码 |
 | server.ts | HTTP | 只读 GET、钱包 GET/POST、CORS、JSON 与固定错误边界 |
+| ../vercel/handler.ts | Vercel HTTP | `/api` 与 `/api/desk` 分流、公共 GET 缓存头与 Cron 鉴权 |
 | test-utils.ts | 测试辅助 | PGlite 加载本地 fixtures 与合成价格 |
 | math.test.ts | 测试 | 清算健康金标准、手算利率与超安全整数数量 |
 | queries.test.ts | 测试 | Anchor 快照数量、缺价格、微量债务与 group 费用开关 |

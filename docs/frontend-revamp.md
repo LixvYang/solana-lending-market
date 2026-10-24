@@ -640,3 +640,33 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **部署文档写反**:"用户付 ATA 创建租金"——领取时实际是水龙头钱包付。已改正并写明每人成本与默认限量下的日耗。
 - **实测**(临时 `FAUCET_WINDOW_MAX=1`):第一次真实领取成功、名额 1→0;第二个钱包返回 `FAUCET_WINDOW_FULL` 与恢复时间;界面中英文均显示恢复时间。验收后恢复默认 5 小时 30 份。
 - 已知限制(如实保留):限额在内存，重启清零、多副本不共享——水龙头必须单实例部署。
+
+### T21 Vercel + Supabase 全免费部署 — todo
+
+作者决定：前端与后端都部署在 **Vercel(Hobby,免费)**,数据库用 **Supabase 免费版**,不用自有 VPS,不付费。Vercel 只能跑按请求执行的函数，Hobby 定时任务最多每天一次，所以两个常驻进程要改造。**现有容器部署(`SERVICE=api|faucet|keeper|ingest`、docker compose)必须保持可用**,本任务是新增一条部署路径。
+
+**Claude 已确认的事实(不用再查):**
+- 价格维护(keeper)在 Vercel 上**不部署**:借款/取款交易会在用户自己的交易里刷新 mock 价格(`src/api/builder/index.ts` 的 `ep8-price-refresh`);兑换台读 mock 价格只看数值不看年龄(`src/faucet/prices.ts` `usdMicroOf`);Pyth 价格由 Pyth 推送。
+- `/api/send` 确认后已立即索引该笔交易(`src/api/send.ts` 的 `index`)。
+- 依赖 `@vercel/functions@3.9.11` 已由 Claude 安装并提交(提供 `waitUntil`)。不要再加其他依赖。
+
+**要做:**
+1. **函数入口**:仓库根目录 `api/[...path].ts`(Vercel Node 运行时)一个函数承接全部后端:
+   - `/api/desk/*` → 水龙头/兑换台(去掉 `/api/desk` 前缀后交给现有 `faucetRoute` 逻辑);其余 `/api/*` → 现有 API `route`。前后端同源，前端 `VITE_API_BASE` 留空，`FAUCET_URL=/api/desk/faucet`(确认前端 `chain.faucet`/`deskBase`/`apiUrl` 对相对路径工作正常，必要时修)。
+   - 复用 `handle`/`handleFaucet` 的请求解析、错误映射与安全约束(64KB 限制、不回显异常);Vercel 的 req/res 兼容 Node `IncomingMessage`/`ServerResponse`。
+   - 模块级缓存 `pgDb()` 与 RPC 连接(同一实例的多次调用复用);`PG_POOL_MAX` 在 Vercel 上建议 1。
+   - Vercel 上**不执行迁移**(会话级 advisory lock 不适用 Supabase 事务池);只检查迁移齐全，迁移由维护者在本地对 Session 连接串运行 `scripts/migrate.ts`。
+   - 确认所有查询不依赖会话状态(命名 prepared statement、`SET`、会话级锁),因为生产连接走 Supabase **Transaction pooler**。
+2. **按需同步(替代 `ingest --follow`)**:新增迁移 006,建一张租约/状态表(或扩展 `ingest_cursor`),记录 `last_sync_at`、`last_snapshot_at`、`lease_until`。
+   - 每个 API 请求在响应后用 `waitUntil` 触发 `maybeSync`:若距 `last_sync_at` ≥ 30 秒，以一条原子 `UPDATE … WHERE lease_until < now() RETURNING` 抢 60 秒租约，抢到才执行一次 `followOnce`(含 `syncStored` 与 `finalizeSweep`),`lastSnapshotAt` 从表里读写，结束释放租约并更新时间。抢不到直接返回。
+   - 失败只记日志(不含 RPC URL),不影响请求。
+   - 本地/容器模式不启用(只在 Vercel 入口调用)。
+3. **每日定时**:`vercel.json` 增加 `crons`:每天一次调用 `/api/cron/sync`,校验 `Authorization: Bearer ${CRON_SECRET}`,执行一次 `maybeSync`(兼作 Supabase 7 天无活动暂停的保活)。
+4. **水龙头限流改存数据库**(Vercel 多实例不共享内存):迁移 006 增加领取预留表(wallet、ip、at)。预留在一个事务里用 `pg_advisory_xact_lock(<常量>)` 串行化后计数并插入，规则与 T20 完全相同(钱包 10 分钟、IP 每小时 5 次、全站 `FAUCET_WINDOW_HOURS` 内 `FAUCET_WINDOW_MAX` 次;失败也占名额)。`quota()` 也从表计算。保留纯函数 `reserve` 作为规则的单一来源(数据库层只负责取数和写入),旧数据定期按窗口清理。容器模式也改用数据库实现(单一实现，不留两套)。
+5. **CDN 缓存公共只读接口**:对与用户无关的 GET(`/api/pool`、`/api/accounts`、`/api/activity`、银行历史、利率曲线、`/api/config`、`/api/desk/swap/rates`、`/api/desk/faucet/config` 等)加 `Cache-Control: public, s-maxage=5, stale-while-revalidate=10`;`/api/wallet/*`、钱包历史、所有 POST、错误响应不缓存。目的是轮询不耗尽 Hobby 的函数调用额度。
+6. **构建配置**:根 `vercel.json` 安装命令同时装根目录与 `web/` 依赖;函数 `maxDuration` 设 60(发送交易最多等 60 秒确认);`regions` 留注释说明应与 Supabase 区域就近(不写死)。确认 `api/` 目录与 IDL JSON 等相对导入能被 Vercel 打包(写明假设，Claude 会用 `vercel build` 验证)。
+7. **文档**:`docs/deploy.md` 新增"Vercel + Supabase(全免费)"一节：环境变量表(`DATABASE_URL` 用 Transaction pooler、`RPC_URL`、`POOL_GROUP`、`FAUCET_SECRET_KEY`、`FAUCET_URL=/api/desk/faucet`、`CRON_SECRET`、`TRUST_PROXY_HOPS`(Vercel 的取值写明依据或标"待验证")、`FAUCET_WINDOW_*`)、迁移与数据导入步骤(本地 `pg_dump` → Supabase Session 连接串 `pg_restore`)、没有 keeper 的影响、按需同步的行为(无人访问时数据不更新，有访问时最多旧约 30 秒)。`docs/decisions.md` 新增 D-028 记录取舍。
+
+**测试**:租约(并发两次只一个执行、过期可重抢、未到 30 秒不执行)、`lastSnapshotAt` 读写;数据库限流与 T20 规则一致(用 PGlite)、并发预留不超额;路由分发(`/api/desk/*` 与 `/api/*`)、缓存头(公共 GET 有、钱包/POST/错误没有);cron 鉴权。
+
+**验收**:与 CI 相同的检查全部通过。真实 Vercel 预览部署与 Supabase 联调由 Claude 完成。

@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { api, apiUrl } from './api';
+import { deskBase } from './wallet/chain';
 
 test('API base applies to same-origin paths and leaves public faucet URLs intact', () => {
   assert.equal(apiUrl('/api/pool'), '/api/pool');
   assert.equal(apiUrl('https://api.example.com:8788/swap/rates'), 'https://api.example.com:8788/swap/rates');
+  assert.equal(deskBase('/api/desk/faucet'), '/api/desk');
+  assert.equal(apiUrl(`${deskBase('/api/desk/faucet')}/swap/rates`), '/api/desk/swap/rates');
 });
 
 test('pool banks are ordered by total deposits in USD, with unknown values last', async () => {

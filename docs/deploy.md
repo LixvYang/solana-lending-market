@@ -1,5 +1,7 @@
 # Devnet 部署
 
+运维钱包地址、余额与补充方式见 [addresses.md](addresses.md)。
+
 ## 通用容器平台
 
 构建仓库根目录的 `Dockerfile`，同一个镜像启动四个常驻服务，分别设置 `SERVICE=api`、`faucet`、`keeper`、`ingest`。API 启动时取得 Postgres session advisory lock 并执行迁移；其他服务检查迁移齐全后启动。每个服务独立设置环境变量，不依赖平台专有配置文件或本地持久卷。只有 API 与 faucet 需要公网入口；keeper、ingest 只需出站访问 Postgres 与 Solana RPC。

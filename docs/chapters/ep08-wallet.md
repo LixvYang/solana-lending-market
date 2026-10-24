@@ -325,26 +325,25 @@ export async function finalizeSweep(db: Db, rpc: SweepRpc, batch = 100): Promise
 
 <!-- snippet: src/faucet/limit.ts#ep8-faucet-limit -->
 ```ts
-export function reserve(state: LimitState, wallet: string, ip: string, now: number, dailyMax = 2000):
-  { ok: true; state: LimitState; next: number } | { ok: false; next: number } {
-  const day = new Date(now).toISOString().slice(0, 10), count = state.day === day ? state.count : 0;
+export function reserve(state: LimitState, wallet: string, ip: string, now: number, windowHours = 5, windowMax = 30):
+  { ok: true; state: LimitState; next: number } | { ok: false; next: number; reason: 'window' | 'limit' } {
+  const cutoff = now - windowHours * 3600_000;
+  const reservations = state.reservations.filter(time => time > cutoff);
   const ips = Object.fromEntries(Object.entries(state.ips).map(([key, times]) => [key, times.filter(t => t > now - 3600_000)]).filter(([, times]) => times.length));
   const wallets = Object.fromEntries(Object.entries(state.wallets).filter(([, time]) => time + 600_000 > now));
-  const hits = ips[ip] ?? [], deadlines = [now];
+  const hits = ips[ip] ?? [], deadlines: number[] = [];
   if (wallets[wallet] !== undefined) deadlines.push(wallets[wallet] + 600_000);
   if (hits.length >= 5) deadlines.push(hits[hits.length - 5] + 3600_000);
-  if (count >= dailyMax) deadlines.push(Date.parse(`${day}T00:00:00Z`) + 86400_000);
-  const next = Math.max(...deadlines);
-  if (next > now) return { ok: false, next };
+  if (reservations.length >= windowMax) deadlines.push(reservations[0] + windowHours * 3600_000);
+  if (deadlines.length) return { ok: false, next: Math.max(...deadlines), reason: reservations.length >= windowMax ? 'window' : 'limit' };
   const updated = [...hits, now];
-  const nextAfterGrant = Math.max(now + 600_000, updated.length >= 5 ? updated[updated.length - 5] + 3600_000 : now,
-    count + 1 >= dailyMax ? Date.parse(`${day}T00:00:00Z`) + 86400_000 : now);
-  return { ok: true, state: { wallets: { ...wallets, [wallet]: now }, ips: { ...ips, [ip]: updated }, day, count: count + 1 }, next: nextAfterGrant };
+  return { ok: true, state: { wallets: { ...wallets, [wallet]: now }, ips: { ...ips, [ip]: updated }, reservations: [...reservations, now] },
+    next: Math.max(now + 600_000, updated.length >= 5 ? updated[updated.length - 5] + 3600_000 : now) };
 }
 ```
 <!-- /snippet -->
 
-限流:同一个钱包 10 分钟一次;同一个 IP 每小时 5 次;每天全局有上限。限流状态在内存里,**重启会清零**。
+限流:同一个钱包 10 分钟一次;同一个 IP 每小时 5 次;全站任意 5 小时内最多 30 份(「后续增补」,T20,原为每天上限)。限流状态在内存里,**重启会清零**,所以水龙头只能单实例部署。
 
 ## 跑一遍
 

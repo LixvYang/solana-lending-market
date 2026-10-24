@@ -9,22 +9,35 @@ import { submitSigned } from '../api/send';
 import type { WalletRpc, WaitClock } from '../api/wallet-rpc';
 import { realClock } from '../api/wallet-rpc';
 import type { FaucetResponse } from '../api/types';
-import { emptyLimits, reserve } from './limit';
+import { emptyLimits, quota, reserve } from './limit';
+import { lowBalanceWarning } from '../core/low-balance';
 import type { Grant } from './config';
 import type { DeskLeg } from '../store/desk-events';
 export class FaucetLimit extends ApiError {
   constructor(public readonly next_allowed_at: string) { super(429, '领取过于频繁，请稍后再试。', 'FAUCET_LIMIT'); }
 }
-export function createFaucet(payer: Keypair, rpc: WalletRpc, grants: Grant[], dailyMax = 2000, clock: WaitClock = realClock,
+export class FaucetWindowFull extends ApiError {
+  constructor(next: string) { super(429, '本时段名额已领完。', 'FAUCET_WINDOW_FULL', { next }); }
+}
+export type FaucetService = ((input: unknown, ip: string) => Promise<FaucetResponse>) & { quota: () => ReturnType<typeof quota> };
+export function createFaucet(payer: Keypair, rpc: WalletRpc, grants: Grant[], windowHours = 5, windowMax = 30, minSol = 0.2, clock: WaitClock = realClock,
   record?: (signature: string, wallet: string, details: DeskLeg[]) => Promise<void>) {
-  // 重启会清零。先同步预留，防止并发请求越过限额；失败也占一次，避免重试放大/超时重复发币。
+  // 重启会清零；多实例也各自计数。预留按滑动窗口保存在内存，失败也占名额，避免重试放大。
   // 专用钱包只能转已有测试币；本模块从不加载管理员或 mint authority，不能铸币。
   let state = emptyLimits();
-  return async (input: unknown, ip: string): Promise<FaucetResponse> => {
+  const warnLow = lowBalanceWarning();
+  const handler = (async (input: unknown, ip: string): Promise<FaucetResponse> => {
     const wallet = publicKey(objectBody(input).wallet);
-    const limit = reserve(state, wallet.toBase58(), ip, clock.now(), dailyMax);
-    if (!limit.ok) throw new FaucetLimit(new Date(limit.next).toISOString());
+    const limit = reserve(state, wallet.toBase58(), ip, clock.now(), windowHours, windowMax);
+    if (!limit.ok) {
+      const next = new Date(limit.next).toISOString();
+      if (limit.reason === 'window') throw new FaucetWindowFull(next);
+      throw new FaucetLimit(next);
+    }
     state = limit.state;
+    const sol = await rpc.getBalance(payer.publicKey, 'confirmed'), solValue = sol / 1_000_000_000;
+    if (warnLow(solValue, 1, clock.now())) console.warn(`faucet SOL balance low wallet=${payer.publicKey.toBase58()} balance=${solValue.toFixed(4)} SOL`);
+    if (solValue < minSol) throw new ApiError(503, '水龙头 SOL 余额不足，暂时无法领取。', 'FAUCET_EMPTY');
     for (const grant of grants) if (await tokenBalance(rpc, grant.mint, payer.publicKey) < grant.amount)
       throw new ApiError(503, '水龙头测试代币余额不足，请联系维护者补充。', 'FAUCET_EMPTY');
     const instructions = [ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })];
@@ -41,5 +54,7 @@ export function createFaucet(payer: Keypair, rpc: WalletRpc, grants: Grant[], da
     if (record) try { await record(signature, wallet.toBase58(), grants.map(g => ({ symbol: g.label, amount: String(g.amount), decimals: g.decimals ?? 0 }))); }
     catch { console.error('desk history write failed'); }
     return { signatures: [signature], granted: grants.map(g => ({ label: g.label, amount: String(g.amount) })), next_allowed_at: new Date(limit.next).toISOString() };
-  };
+  }) as FaucetService;
+  handler.quota = () => quota(state, clock.now(), windowHours, windowMax);
+  return handler;
 }

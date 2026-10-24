@@ -3,6 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import type { BankView } from '../api/types';
 import { PYTH_BANKS } from '../oracle/pyth-banks';
 export interface Grant { label: string; mint: PublicKey; amount: bigint; decimals?: number }
+// 30 次 × 新用户约 0.0123 SOL 的账户租金 ≈ 0.37 SOL / 5 小时，按持续满额算最坏约 1.8 SOL / 天。
 export function nativeAmount(value: string, decimals: number): bigint {
   if (!/^\d+(?:\.\d+)?$/.test(value)) throw Error('invalid amount');
   const [whole, fraction = ''] = value.split('.');
@@ -25,8 +26,15 @@ export function faucetGrants(banks: BankView[], env: NodeJS.ProcessEnv = process
     return [{ label, mint: new PublicKey(bank.mint), amount: nativeAmount(env[name] ?? fallback, bank.decimals), decimals: bank.decimals }];
   });
 }
-export function dailyLimit(value: string | undefined): number {
-  if (value === undefined) return 2000;
-  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < 1) throw Error('invalid daily limit');
+export function windowHours(value: string | undefined): number { return positiveInteger(value, 5, 'window hours'); }
+export function windowMax(value: string | undefined): number { return positiveInteger(value, 30, 'window max'); }
+export function minimumSol(value: string | undefined): number {
+  const parsed = value === undefined ? 0.2 : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw Error('invalid faucet minimum SOL');
+  return parsed;
+}
+function positiveInteger(value: string | undefined, fallback: number, name: string): number {
+  if (value === undefined) return fallback;
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < 1) throw Error(`invalid faucet ${name}`);
   return Number(value);
 }

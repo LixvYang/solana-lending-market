@@ -6,17 +6,23 @@ import { keeperLoop, intervalMs } from '../src/keeper/loop';
 import { cliRpc, serviceKeypair, sendInstructions } from './admin-runtime';
 import { startWorkerHealth } from '../src/core/worker-health';
 import { hostAddress, portNumber } from '../src/api/server';
+import { lowBalanceWarning } from '../src/core/low-balance';
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 1 && args[0] === '--help') { console.log('用法: price-keeper [--interval 秒] (默认 180)'); return; }
   const interval = intervalMs(args), payer = serviceKeypair(process.env.KEEPER_SECRET_KEY, process.env.KEEPER_KEYPAIR, 'KEEPER'), rpc = cliRpc(), program = mocksProgram();
   const health = startWorkerHealth(interval, process.env.PORT ? portNumber(process.env.PORT) : undefined, hostAddress());
+  const warnLow = lowBalanceWarning();
   let stopped = false;
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { stopped = true; });
   process.exitCode = await keeperLoop(async () => {
     try {
       const { values, signature } = await refreshPrices(rpc, program, batch => sendInstructions(rpc, payer,
         batch.map(value => value.instruction), batch.map(value => value.signer)));
+      try {
+        const sol = (await rpc.getBalance(payer.publicKey, 'confirmed')) / 1_000_000_000;
+        if (warnLow(sol, 0.02)) console.warn(`price keeper SOL balance low wallet=${payer.publicKey.toBase58()} balance=${sol.toFixed(4)} SOL`);
+      } catch { console.warn('price keeper SOL balance check failed'); }
       health.success();
       console.log(`${new Date().toISOString()} refreshed=${values.map(v => v.label).join(',') || 'none'} signature=${signature ?? 'none'}`);
     } catch (error) {

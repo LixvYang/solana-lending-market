@@ -44,6 +44,8 @@
 
 ## 快速开始
 
+所有链上地址(程序、借贷池、各资产的 mint/银行/价格账户、需要补充 SOL 的运维钱包)见 [docs/addresses.md](docs/addresses.md)。
+
 需要 Node 24、pnpm、Docker、Solana CLI 2.1.20。
 
 **只看解码(不需要网络、数据库、钱包):**

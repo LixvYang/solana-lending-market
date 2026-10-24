@@ -42,6 +42,8 @@ export function apiErrorText(code: string | undefined, params: Record<string, st
     case 'TRANSFER_FAILED': return t.apiTransferFailed;
     case 'NO_PRICE_SOURCE': return t.apiNoPriceSource(symbol);
     case 'FAUCET_LIMIT': return t.apiFaucetLimit;
+    // 日期由字典按自身语言格式化：切换语言的那次渲染里 <html lang> 还没更新，不能读它。
+    case 'FAUCET_WINDOW_FULL': return params?.next && Number.isFinite(Date.parse(params.next)) ? t.apiFaucetWindowFull(params.next) : t.apiFaucetLimit;
     case 'INTERNAL_ERROR': return t.apiError;
     default: return fallback;
   }

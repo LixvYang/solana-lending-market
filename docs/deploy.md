@@ -15,6 +15,9 @@
 | `PG_POOL_MAX` | 全部 | 每个进程连接池上限，默认 5。四个进程合计最多 20 条连接；连接数较紧时按实例数调低 |
 | `RPC_URL` | faucet、keeper、ingest；API 可选 | Solana devnet RPC。API 不设时只读数据仍可用，钱包接口不可用 |
 | `FAUCET_SECRET_KEY` | faucet | 专用水龙头密钥，JSON 数组或 base58；与 `FAUCET_KEYPAIR` 文件路径二选一 |
+| `FAUCET_WINDOW_HOURS` / `FAUCET_WINDOW_MAX` | faucet | 滑动时段长度与全站成功预留上限，默认 5 小时 / 30 次；状态在内存，进程重启或多副本之间不共享 |
+| `FAUCET_MIN_SOL` | faucet | 领取前的最低 SOL 余额，默认 0.2 SOL；低于 1 SOL 会限频告警 |
+| `TRUST_PROXY_HOPS` | faucet | 可信代理跳数，默认 0；Railway 设置为 1，其他平台按实际代理追加的 XFF 跳数设置 |
 | `KEEPER_SECRET_KEY` | keeper | 专用 keeper 密钥，JSON 数组或 base58；与 `KEEPER_KEYPAIR` 文件路径二选一 |
 | `FAUCET_URL` | API | 浏览器可访问的 faucet URL，例如 `https://api.example.com/faucet` |
 | `ALLOWED_ORIGINS` | API、faucet | 前端 HTTPS 源，多个值逗号分隔 |
@@ -29,7 +32,7 @@ Supabase 使用 **Session 模式**连接池 URI。迁移依赖 Postgres 会话�
 
 1. 从 GitHub 创建四个 Railway service，均指向同一仓库与根目录 Dockerfile；每个 service 的 `SERVICE` 分别设为 `api`、`faucet`、`keeper`、`ingest`。
 2. 为四个 service 设置同一 Supabase Session Pooler `DATABASE_URL`，以及 `PG_POOL_MAX`(例如 2，按数据库连接上限和副本数计算)。
-3. 设置所需的 `RPC_URL`；faucet 与 keeper 分别设置 `FAUCET_SECRET_KEY`、`KEEPER_SECRET_KEY`。使用 Railway secret variables 存储密钥，不使用部署者/管理员钱包。
+3. 设置所需的 `RPC_URL`；faucet 与 keeper 分别设置 `FAUCET_SECRET_KEY`、`KEEPER_SECRET_KEY`。faucet 设置 `TRUST_PROXY_HOPS=1`，只信 Railway 在 `X-Forwarded-For` 末尾追加的一跳。使用 Railway secret variables 存储密钥，不使用部署者/管理员钱包。
 4. 为 API、faucet 开启公网上线域名；将 Railway 提供的 `PORT` 留给应用监听。为两个服务配置 `/healthz`。keeper、ingest 不生成公网域名，但可以保留平台内部健康探针端口。
 5. 等 API 的迁移与 `/healthz` 成功后启动 faucet、keeper、ingest。设置 API 的 `FAUCET_URL` 为公开 faucet URL，`ALLOWED_ORIGINS` 为前端域名。
 
@@ -53,7 +56,7 @@ API 主机需提供 HTTPS(可由 Caddy/Nginx 等反向代理终止 TLS)，否则
 
 最低余额是启动建议，不是协议常量，实际交易费用和账户租金可能变化：
 
-- 水龙头/兑换台：至少 0.1 SOL 做运营缓冲，并备足准备发放的测试币。用户付 ATA 创建租金与兑换交易手续费；兑换台需保留约 0.05 SOL，不把全部 SOL 换出。
+- 水龙头/兑换台：领取时由水龙头钱包为新用户创建代币账户(每人最多 6 个，约 0.0123 SOL)并付手续费;兑换交易由用户付手续费。低于 `FAUCET_MIN_SOL`(默认 0.2)停止发放，给兑换台留手续费;按默认限量最坏约 1.8 SOL/天，地址与补充方式见 [addresses.md](addresses.md)。
 - keeper：至少 0.02 SOL 作为多轮价格更新的手续费余额；不够时补充此专用钱包。
 - API、ingest：不需要 SOL 钱包。用户自己的 Solana 钱包需要 SOL 支付交易费与首次创建代币账户的租金。
 - 管理员钱包不放在服务器上。若要新建/升级程序或管理银行，单独在可信环境使用 `ANCHOR_WALLET`，本部署服务不需要它。

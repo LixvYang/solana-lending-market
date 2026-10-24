@@ -322,6 +322,8 @@ export interface FaucetResponse {
   granted: { label: string; amount: string }[];
   next_allowed_at: string;
 }
+export interface FaucetQuotaView { max: number; remaining: number; window_hours: number; resets_at: string | null }
+export interface FaucetConfigView { quota: FaucetQuotaView }
 
 /* ───────────────────────── 兑换(SOL 与池子资产任意两两互换) ─────────────────────────
  * 测试币是自己发行的,没有真实的 AMM 池子。兑换台是按预言机报价的"原子兑换":一笔交易里同时

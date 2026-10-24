@@ -113,6 +113,7 @@ export function installMock() {
     }
     if (url.pathname === '/swap/send') return ok({ signature: mockSignature, status: 'confirmed', error: null, slot: '1', indexed: true });
     if (url.pathname === '/faucet') return ok({ signatures: [], granted: [], next_allowed_at: new Date().toISOString() });
+    if (url.pathname === '/faucet/config') return ok({ quota: { max: 30, remaining: 24, window_hours: 5, resets_at: null } });
     if (!url.pathname.startsWith('/api/')) return real(input, init);
     if (url.pathname === '/api/config') return ok({ faucet_url: 'http://localhost:8788/faucet' });
     if (/^\/api\/wallet\/[^/]+\/history$/.test(url.pathname)) {

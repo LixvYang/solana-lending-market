@@ -1,4 +1,5 @@
 import type { zh } from './zh';
+import { fmtTime } from '../format';
 
 type Widen<T> = T extends (...args: infer A) => string ? (...args: A) => string : T extends string ? string : never;
 export const en: { [K in keyof typeof zh]: Widen<typeof zh[K]> } = {
@@ -36,7 +37,7 @@ export const en: { [K in keyof typeof zh]: Widen<typeof zh[K]> } = {
   chartLoadFailed: 'Chart failed to load', reload: 'Reload',
   netAssets: 'Net worth', netApy: 'Net APY', borrowPowerUsed: 'Borrow power used', reading: 'Loading…',
   gettingStarted: 'Get started', stepDone: 'Complete', stepNotDone: 'Incomplete',
-  connectDevnetWallet: 'Connect a devnet wallet', claimDevnetSol: 'Get devnet SOL', getTestTokens: 'Get test tokens', supplyCollateral: 'Supply collateral', borrowAssets: 'Borrow assets', goSupply: 'Go to supply →', goBorrow: 'Go to borrow →',
+  connectDevnetWallet: 'Connect a devnet wallet', claimDevnetSol: 'Get devnet SOL', getTestTokens: 'Get test tokens', faucetQuota: (n) => `${n} ${n === 1 ? 'claim' : 'claims'} left in this period`, supplyCollateral: 'Supply collateral', borrowAssets: 'Borrow assets', goSupply: 'Go to supply →', goBorrow: 'Go to borrow →',
   walletSol: 'Wallet SOL', solInsufficient: 'Low SOL balance. Get SOL from the faucet ↗', swapSol: 'Swap SOL', yourSupplies: 'Your supplies', yourBorrows: 'Your borrows', noSupplies: 'No supplies yet', noBorrows: 'No borrows yet',
   supplyAssets: 'Assets to supply', borrowAssetsTitle: 'Assets to borrow', walletBalance: 'Wallet balance', supplyButton: 'Supply', borrowButton: 'Borrow', supplyCollateralFirst: 'Supply collateral to borrow',
   historyRecords: 'History', retryLater: 'Failed to load. Try again later.', noRecords: 'No records yet',
@@ -68,8 +69,8 @@ export const en: { [K in keyof typeof zh]: Widen<typeof zh[K]> } = {
   readActivityFailed: (error) => `Failed to load activity: ${error}`, readActivity: 'Loading…', unknownTime: 'Time unknown', timeSlot: (time, slot) => time ? `${time}, slot ${slot}` : `slot ${slot}`,
   notAvailable: '—',
   apiError: 'The request could not be completed. Try again later.', apiPriceUnavailable: (symbol) => `${symbol} price is temporarily unavailable. Try again later.`,
-  apiDeskInsufficient: (symbol) => `The swap desk has insufficient ${symbol}. Try a smaller amount or try again later.`, apiFaucetEmpty: 'The faucet is out of test tokens. Please contact the maintainer.',
-  apiTransferTimeout: 'Transfer confirmation timed out. Check your wallet balance later.', apiTransferFailed: 'The faucet transfer failed. Please contact the maintainer.', apiNoPriceSource: (symbol) => `No price source is available for ${symbol}.`, apiFaucetLimit: 'Too many claims. Try again later.',
+  apiDeskInsufficient: (symbol) => `The swap desk has insufficient ${symbol}. Try a smaller amount or try again later.`, apiFaucetEmpty: 'The faucet balance is too low to claim. Please try again later.',
+  apiTransferTimeout: 'Transfer confirmation timed out. Check your wallet balance later.', apiTransferFailed: 'The faucet transfer failed. Please contact the maintainer.', apiNoPriceSource: (symbol) => `No price source is available for ${symbol}.`, apiFaucetLimit: 'Too many claims. Try again later.', apiFaucetWindowFull: (next) => `This period's quota is used up. Available again at ${fmtTime(next, 'en')}`,
   programRiskRejected: 'Collateral health is too low or a price is stale. Reduce the borrow or withdrawal amount, or add collateral.', programStaleOracle: 'The price is stale. Try again later.',
   programCapacityExceeded: 'The pool capacity is full.', programLowLiquidity: 'The pool has insufficient liquidity. Try a smaller amount.', programNoPosition: 'No position exists for this token.',
   programNoDeposit: 'There is no supply available to withdraw.', programNoBorrow: 'There is no debt to repay.', programPaused: 'The pool is paused.',

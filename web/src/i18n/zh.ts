@@ -1,3 +1,5 @@
+import { fmtTime } from '../format';
+
 export const zh = {
   market: '市场', dashboard: '我的仓位', swap: '兑换', explorer: '链上数据', page: '页面', lendingMarket: '借贷市场',
   language: 'EN', connected: '钱包已连接', riskyAccounts: (n: number) => `${n} 个账户可被清算`, liquidatable: '可清算', mockData: '模拟数据',
@@ -33,7 +35,7 @@ export const zh = {
   chartLoadFailed: '图表加载失败', reload: '重新加载',
   netAssets: '净资产', netApy: '净 APY', borrowPowerUsed: '已用借款额度', reading: '读取中…',
   gettingStarted: '开始使用', stepDone: '已完成', stepNotDone: '未完成',
-  connectDevnetWallet: '连接 devnet 钱包', claimDevnetSol: '领取 devnet SOL', getTestTokens: '领取测试币', supplyCollateral: '存入抵押资产', borrowAssets: '借出资产', goSupply: '去存入资产 →', goBorrow: '去借出资产 →',
+  connectDevnetWallet: '连接 devnet 钱包', claimDevnetSol: '领取 devnet SOL', getTestTokens: '领取测试币', faucetQuota: (n: number) => `本时段剩余 ${n} 份`, supplyCollateral: '存入抵押资产', borrowAssets: '借出资产', goSupply: '去存入资产 →', goBorrow: '去借出资产 →',
   walletSol: '钱包 SOL', solInsufficient: 'SOL 不足，去水龙头领取 ↗', swapSol: '用 SOL 兑换', yourSupplies: '我的存款', yourBorrows: '我的借款', noSupplies: '还没有存款', noBorrows: '还没有借款',
   supplyAssets: '可存资产', borrowAssetsTitle: '可借资产', walletBalance: '钱包余额', supplyButton: '存入', borrowButton: '借出', supplyCollateralFirst: '存入抵押后可借款',
   historyRecords: '历史记录', retryLater: '读取失败，稍后重试', noRecords: '还没有记录',
@@ -65,8 +67,8 @@ export const zh = {
   readActivityFailed: (error: string) => `读取活动失败：${error}`, readActivity: '正在读取…', unknownTime: '时间未知', timeSlot: (time: string, slot: string) => time ? `${time}，slot ${slot}` : `slot ${slot}`,
   notAvailable: '—',
   apiError: '请求暂时无法完成，请稍后重试。', apiPriceUnavailable: (symbol: string) => `${symbol} 价格暂时不可用，请稍后再试。`,
-  apiDeskInsufficient: (symbol: string) => `兑换台的 ${symbol} 不足，请换小一点的数量或稍后再试。`, apiFaucetEmpty: '水龙头测试代币余额不足，请联系维护者补充。',
-  apiTransferTimeout: '转账确认超时，请稍后检查钱包余额。', apiTransferFailed: '水龙头转账失败，请联系维护者。', apiNoPriceSource: (symbol: string) => `${symbol} 没有价格来源`, apiFaucetLimit: '领取过于频繁，请稍后再试。',
+  apiDeskInsufficient: (symbol: string) => `兑换台的 ${symbol} 不足，请换小一点的数量或稍后再试。`, apiFaucetEmpty: '水龙头余额不足，暂时无法领取，请稍后再试。',
+  apiTransferTimeout: '转账确认超时，请稍后检查钱包余额。', apiTransferFailed: '水龙头转账失败，请联系维护者。', apiNoPriceSource: (symbol: string) => `${symbol} 没有价格来源`, apiFaucetLimit: '领取过于频繁，请稍后再试。', apiFaucetWindowFull: (next: string) => `本时段名额已领完，${fmtTime(next, 'zh')} 后恢复。`,
   programRiskRejected: '抵押健康度不足或价格过期，请减少借款/取款或补充抵押。', programStaleOracle: '价格已过期，请稍后重试。',
   programCapacityExceeded: '池子容量已满。', programLowLiquidity: '池子流动性不足，请减少数量。', programNoPosition: '没有这个代币的头寸。',
   programNoDeposit: '没有可取出的存款。', programNoBorrow: '没有待偿还的借款。', programPaused: '池子已暂停。',

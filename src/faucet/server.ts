@@ -6,7 +6,7 @@ import { ApiError } from '../api/errors';
 import { FaucetLimit } from './service';
 import type { Swap } from './swap';
 import type { FaucetResponse } from '../api/types';
-export type FaucetHandler = ((input: unknown, ip: string) => Promise<FaucetResponse>) & { quota?: () => unknown };
+export type FaucetHandler = ((input: unknown, ip: string) => Promise<FaucetResponse>) & { quota?: () => unknown | Promise<unknown> };
 export async function faucetRoute(method: string, url: string, input: unknown, ip: string, grant: FaucetHandler, swap?: Swap, checkDb?: () => Promise<void>) {
   try {
     if (method === 'OPTIONS') return { status: 204, headers: corsHeaders, body: '' };
@@ -15,7 +15,7 @@ export async function faucetRoute(method: string, url: string, input: unknown, i
       return { status: 200, headers: corsHeaders, body: '{"ok":true}' };
     }
     if (swap && method === 'GET' && url === '/swap/rates') return { status: 200, headers: corsHeaders, body: JSON.stringify(await swap.rates()) };
-    if (method === 'GET' && url === '/faucet/config' && grant.quota) return { status: 200, headers: corsHeaders, body: JSON.stringify({ quota: grant.quota() }) };
+    if (method === 'GET' && url === '/faucet/config' && grant.quota) return { status: 200, headers: corsHeaders, body: JSON.stringify({ quota: await grant.quota() }) };
     if (swap && method === 'POST' && url === '/swap/quote') return { status: 200, headers: corsHeaders, body: JSON.stringify(await swap.quote(input)) };
     if (swap && method === 'POST' && url === '/swap/send') return { status: 200, headers: corsHeaders, body: JSON.stringify(await swap.submit(input)) };
     if (method !== 'POST' || url !== '/faucet') throw new ApiError(404, 'not found');

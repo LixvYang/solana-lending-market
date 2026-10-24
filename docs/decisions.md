@@ -518,3 +518,13 @@ codex 的 M7a 离线测试通过后,接上真实 devnet(Helius)、真实 Postgre
 
 **注意:** 第一次端到端在借款步失败(`PriceStale`),因为 API 进程是改代码前启动的，签名者名单里没有 tHYPE;重启 API 后通过。**改了预言机相关代码后要重启 API、兑换台与 keeper。**价格固定意味着 tHYPE 不跟市场走，清算演示仍用 tSOL 改价。
 
+## D-028 全免费托管路径：Vercel Functions + Supabase(2026-10-24)
+
+作者选择不用自有 VPS，前后端放 Vercel Hobby，Postgres 用 Supabase Free。保留现有 `SERVICE=api|faucet|keeper|ingest` 容器路径，新增根目录 Vercel 函数入口：同一个 Node 函数分发 `/api/*` 与 `/api/desk/*`，公共只读 GET 使用 5 秒 CDN 缓存；钱包请求、POST 与错误响应不缓存。前端使用同源 `/api/desk/faucet`，不设置 `VITE_API_BASE`。
+
+Vercel 不运行迁移，也不运行常驻 keeper/ingest。API 请求通过 `waitUntil` 触发 30 秒节流的 `followOnce`，数据库原子租约最长 60 秒；每日 Cron 以 `CRON_SECRET` 鉴权做一次低频同步，并避免 Supabase Free 长时间无活动暂停。mock 价继续由用户借款/取款交易刷新，Pyth 仍由推送账户提供。
+
+Supabase **Transaction pooler** 用于运行时请求；函数连接池默认 1，查询不使用命名 prepared statement 或会话级 `SET`/锁。迁移仍由维护者在本地使用 Supabase **Session pooler** URI 执行。新增 006 迁移保存同步租约与水龙头预留；水龙头容器与 Vercel 共用数据库限流，借助事务级 advisory lock 复用 T20 钱包/IP/全站滑动窗口规则。
+
+`TRUST_PROXY_HOPS` 的 Vercel 取值尚待真实请求头核验，部署文档暂标为待验证；Vercel 打包函数入口及相对导入、Supabase Transaction pooler 行为、Hobby 预览部署和全链路仍待 Claude 联调。具体步骤见 `docs/deploy.md`。
+

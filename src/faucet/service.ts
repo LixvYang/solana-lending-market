@@ -19,22 +19,28 @@ export class FaucetLimit extends ApiError {
 export class FaucetWindowFull extends ApiError {
   constructor(next: string) { super(429, '本时段名额已领完。', 'FAUCET_WINDOW_FULL', { next }); }
 }
-export type FaucetService = ((input: unknown, ip: string) => Promise<FaucetResponse>) & { quota: () => ReturnType<typeof quota> };
+export interface FaucetReservations {
+  reserve(wallet: string, ip: string, windowHours: number, windowMax: number): Promise<ReturnType<typeof reserve>>;
+  quota(windowHours: number, windowMax: number): Promise<ReturnType<typeof quota>>;
+}
+export type FaucetService = ((input: unknown, ip: string) => Promise<FaucetResponse>) & { quota: () => ReturnType<typeof quota> | Promise<ReturnType<typeof quota>> };
 export function createFaucet(payer: Keypair, rpc: WalletRpc, grants: Grant[], windowHours = 5, windowMax = 30, minSol = 0.2, clock: WaitClock = realClock,
-  record?: (signature: string, wallet: string, details: DeskLeg[]) => Promise<void>) {
-  // 重启会清零；多实例也各自计数。预留按滑动窗口保存在内存，失败也占名额，避免重试放大。
+  record?: (signature: string, wallet: string, details: DeskLeg[]) => Promise<void>, reservations?: FaucetReservations) {
+  // 部署时传入 reservations(存数据库，多实例共享、重启不清零);不传时退回内存版，只用于测试。失败也占名额，避免重试放大。
   // 专用钱包只能转已有测试币；本模块从不加载管理员或 mint authority，不能铸币。
   let state = emptyLimits();
   const warnLow = lowBalanceWarning();
   const handler = (async (input: unknown, ip: string): Promise<FaucetResponse> => {
     const wallet = publicKey(objectBody(input).wallet);
-    const limit = reserve(state, wallet.toBase58(), ip, clock.now(), windowHours, windowMax);
+    const limit = reservations
+      ? await reservations.reserve(wallet.toBase58(), ip, windowHours, windowMax)
+      : reserve(state, wallet.toBase58(), ip, clock.now(), windowHours, windowMax);
     if (!limit.ok) {
       const next = new Date(limit.next).toISOString();
       if (limit.reason === 'window') throw new FaucetWindowFull(next);
       throw new FaucetLimit(next);
     }
-    state = limit.state;
+    if (!reservations) state = limit.state;
     const sol = await rpc.getBalance(payer.publicKey, 'confirmed'), solValue = sol / 1_000_000_000;
     if (warnLow(solValue, 1, clock.now())) console.warn(`faucet SOL balance low wallet=${payer.publicKey.toBase58()} balance=${solValue.toFixed(4)} SOL`);
     if (solValue < minSol) throw new ApiError(503, '水龙头 SOL 余额不足，暂时无法领取。', 'FAUCET_EMPTY');
@@ -55,6 +61,6 @@ export function createFaucet(payer: Keypair, rpc: WalletRpc, grants: Grant[], wi
     catch { console.error('desk history write failed'); }
     return { signatures: [signature], granted: grants.map(g => ({ label: g.label, amount: String(g.amount) })), next_allowed_at: new Date(limit.next).toISOString() };
   }) as FaucetService;
-  handler.quota = () => quota(state, clock.now(), windowHours, windowMax);
+  handler.quota = () => reservations ? reservations.quota(windowHours, windowMax) : quota(state, clock.now(), windowHours, windowMax);
   return handler;
 }

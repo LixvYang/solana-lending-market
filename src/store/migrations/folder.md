@@ -9,5 +9,6 @@
 
 | 003_labels.sql | 元数据 schema | 链下地址标签，不猜测链上代币名称 |
 | 005_desk_events.sql | 兑换台历史 | 已确认兑换与水龙头发放，不经 marginfi 解码 |
+| 006_vercel_runtime.sql | Vercel 运行状态 | 按需同步租约与跨实例水龙头预留 |
 
 SYNC: 更改 schema 时同步此表、EP6/EP7 与 D-012/D-013。

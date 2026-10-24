@@ -641,7 +641,7 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **实测**(临时 `FAUCET_WINDOW_MAX=1`):第一次真实领取成功、名额 1→0;第二个钱包返回 `FAUCET_WINDOW_FULL` 与恢复时间;界面中英文均显示恢复时间。验收后恢复默认 5 小时 30 份。
 - 已知限制(如实保留):限额在内存，重启清零、多副本不共享——水龙头必须单实例部署。
 
-### T21 Vercel + Supabase 全免费部署 — todo
+### T21 Vercel + Supabase 全免费部署 — done
 
 作者决定：前端与后端都部署在 **Vercel(Hobby,免费)**,数据库用 **Supabase 免费版**,不用自有 VPS,不付费。Vercel 只能跑按请求执行的函数，Hobby 定时任务最多每天一次，所以两个常驻进程要改造。**现有容器部署(`SERVICE=api|faucet|keeper|ingest`、docker compose)必须保持可用**,本任务是新增一条部署路径。
 
@@ -670,3 +670,14 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 **测试**:租约(并发两次只一个执行、过期可重抢、未到 30 秒不执行)、`lastSnapshotAt` 读写;数据库限流与 T20 规则一致(用 PGlite)、并发预留不超额;路由分发(`/api/desk/*` 与 `/api/*`)、缓存头(公共 GET 有、钱包/POST/错误没有);cron 鉴权。
 
 **验收**:与 CI 相同的检查全部通过。真实 Vercel 预览部署与 Supabase 联调由 Claude 完成。
+
+### T21 审查与上线(2026-10-24)— 通过(Claude 修了六处，均为真实部署才暴露的问题)
+
+- **多段路径 404**:非 Next.js 项目里 `api/[...path].ts` 只匹配一段(`^/api/([^/]+)$`),`/api/wallet/<key>`、`/api/desk/*`、`/api/cron/sync` 全部 404。改为 `api/main.ts` + `vercel.json` rewrite(`/api/:path*` → `/api/main?__path=…`),入口还原原始 URL。
+- **兑换台 404**:`faucetRoute` 拿含查询串的 URL 精确比较，改写附带的参数让它全部落空。改为只比较路径。
+- **CLI 部署会上传 `.env` 和 `pgdata/`**:Vercel 默认忽略列表不含它们(这次因文件数超 15000 被拒才发现)。新增白名单式 `.vercelignore`。
+- **`ERR_REQUIRE_ESM`**:`rpc-websockets@9.3.9` 用 `require` 加载纯 ESM 的 `uuid@14`,Vercel 的模块加载器不支持。`pnpm.overrides` 固定 `rpc-websockets@9.3.8`(依赖 `uuid@11`,带 CommonJS)。
+- **anchor 默认导入为 undefined**:Vercel 编译成 CommonJS 后 `import anchor from` 取不到；本地 tsx(原生 ESM)又认不出 `BN` 命名导出。`builder/instructions.ts` 改为 `default ?? 模块本身`。本地用 `tsc --module commonjs` 编译后 `require` 模拟验证。
+- **函数区域**:Supabase 在孟买(ap-south-1),`regions: ["bom1"]`。
+- **数据迁移**:本地 `pg_dump` → Supabase Session 连接串 `pg_restore`(单事务),8 张表行数逐一相等;再执行迁移 006。
+- **预览实测**:全部公共接口、钱包余额、兑换台名额/汇率 200;`/api/pool` 第二次命中 CDN(`x-vercel-cache: HIT`);按需同步写入 `vercel_sync_state` 并新增快照。

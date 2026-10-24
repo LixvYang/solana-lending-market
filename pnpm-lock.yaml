@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  rpc-websockets: 9.3.8
+
 importers:
 
   .:
@@ -823,8 +826,8 @@ packages:
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
-  rpc-websockets@9.3.9:
-    resolution: {integrity: sha512-2iQDaTB4g5fDB2ihrTFSJSibCEuxaRi1q7qTW7ZO9/M5/TC+ToHA4D9/ffNLEbAoHNNrcdeP05oATNk44SKZXA==}
+  rpc-websockets@9.3.8:
+    resolution: {integrity: sha512-7r+fm4tSJmLf9GvZfL1DJ1SJwpagpp6AazqM0FUaeV7CA+7+NYINSk1syWa4tU/6OF2CyBicLtzENGmXRJH6wQ==}
 
   safe-buffer@5.2.1:
     resolution: {integrity: sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==}
@@ -893,8 +896,8 @@ packages:
     resolution: {integrity: sha512-q3l3P9UtEEiAHcsgsqTgf9PPjctrDWoIXW3NpOHFdRDbLvu4DLIcxHangJ4RLrWkBcKjmcs/6NkerI8T/rE4LA==}
     engines: {node: '>=6.14.2'}
 
-  uuid@14.0.3:
-    resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
+  uuid@11.1.1:
+    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
     hasBin: true
 
   uuid@8.3.2:
@@ -1268,7 +1271,7 @@ snapshots:
       fast-stable-stringify: 1.0.0
       jayson: 4.3.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       node-fetch: 2.7.0
-      rpc-websockets: 9.3.9
+      rpc-websockets: 9.3.8
       superstruct: 2.0.2
     transitivePeerDependencies:
       - bufferutil
@@ -1290,7 +1293,7 @@ snapshots:
       fast-stable-stringify: 1.0.0
       jayson: 4.3.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       node-fetch: 2.7.0
-      rpc-websockets: 9.3.9
+      rpc-websockets: 9.3.8
       superstruct: 2.0.2
     transitivePeerDependencies:
       - bufferutil
@@ -1804,14 +1807,14 @@ snapshots:
 
   resolve-pkg-maps@1.0.0: {}
 
-  rpc-websockets@9.3.9:
+  rpc-websockets@9.3.8:
     dependencies:
       '@swc/helpers': 0.5.23
       '@types/uuid': 10.0.0
       '@types/ws': 8.18.2
       buffer: 6.0.3
       eventemitter3: 5.0.4
-      uuid: 14.0.3
+      uuid: 11.1.1
       ws: 8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       bufferutil: 4.1.0
@@ -1867,7 +1870,7 @@ snapshots:
       node-gyp-build: 4.8.4
     optional: true
 
-  uuid@14.0.3: {}
+  uuid@11.1.1: {}
 
   uuid@8.3.2: {}
 

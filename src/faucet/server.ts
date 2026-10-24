@@ -7,7 +7,9 @@ import { FaucetLimit } from './service';
 import type { Swap } from './swap';
 import type { FaucetResponse } from '../api/types';
 export type FaucetHandler = ((input: unknown, ip: string) => Promise<FaucetResponse>) & { quota?: () => unknown | Promise<unknown> };
-export async function faucetRoute(method: string, url: string, input: unknown, ip: string, grant: FaucetHandler, swap?: Swap, checkDb?: () => Promise<void>) {
+export async function faucetRoute(method: string, requestUrl: string, input: unknown, ip: string, grant: FaucetHandler, swap?: Swap, checkDb?: () => Promise<void>) {
+  // 只按路径匹配：平台改写/缓存可能附带查询参数(Vercel 的 __path 等),带着它精确比较会全部 404。
+  const url = requestUrl.split('?')[0];
   try {
     if (method === 'OPTIONS') return { status: 204, headers: corsHeaders, body: '' };
     if (method === 'GET' && (url === '/healthz' || url === '/health')) {

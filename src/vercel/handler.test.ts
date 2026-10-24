@@ -59,3 +59,14 @@ test('还原 vercel.json 改写前的多段路径与查询参数', () => {
   assert.equal(restoreRewrittenUrl('/api/main?__path=desk/faucet/config'), '/api/desk/faucet/config');
   assert.equal(restoreRewrittenUrl('/api/pool?x=1'), '/api/pool?x=1');
 });
+
+test('兑换台路由忽略改写附带的查询参数', async () => {
+  const db = await seedApi();
+  try {
+    const faucet = Object.assign(async () => ({ signatures: [], granted: [], next_allowed_at: '' }), { quota: () => ({ max: 30, remaining: 7, window_hours: 5, resets_at: null }) });
+    const h = createVercelHandler({ db, faucet, cronSecret: 'x', waitUntil: () => {}, maybeSync: async () => {} });
+    const out = response();
+    await h({ method: 'GET', url: '/api/desk/faucet/config?__path=desk/faucet/config&path=desk', headers: {} } as unknown as IncomingMessage, out.res);
+    assert.equal(out.status(), 200); assert.equal(JSON.parse(out.body()).quota.remaining, 7);
+  } finally { await db.close(); }
+});

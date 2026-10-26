@@ -30,8 +30,8 @@ export function AssetPage({ bank, banks, mine, wallet, curve, history, historyEr
       <header className="card asset-summary">
         <div className="asset-head">
           <TokenIcon symbol={bank.label} size={44} />
-          <div><div className="asset-title">{bank.label} <SourceChip source={bank.oracle_source} /></div><div className="muted">{meta.name}</div></div>
-          <div className="asset-price"><div className="stat">{fmtUsd(bank.price)}</div><div className="muted">{bank.price_updated_at ? t.updatedAt(fmtTime(bank.price_updated_at, locale)) : t.noPriceSnapshot}</div></div>
+          <div><div className="asset-title">{bank.label}</div><div className="muted">{meta.name}</div></div>
+          <div className="asset-price"><div className="stat price-cell">{fmtUsd(bank.price)}<SourceChip source={bank.oracle_source} /></div><div className="muted">{bank.price_updated_at ? t.updatedAt(fmtTime(bank.price_updated_at, locale)) : t.noPriceSnapshot}</div></div>
         </div>
         <div className="asset-kpis">
           <div><span className="label">{t.supplyApr}</span><b className="apr-supply">{fmtPct(bank.lending_apr, 2)}</b></div>

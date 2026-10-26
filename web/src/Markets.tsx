@@ -26,7 +26,7 @@ export function Markets({ pool }: { pool: PoolView }) {
               <tr key={b.address} className="pick" onClick={open(b.label)}
                   tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open(b.label)()}>
                 <td data-label={t.asset}><TokenName symbol={b.label} /></td>
-                <td className="n" data-label={t.price}><div>{fmtUsd(b.price)}</div><SourceChip source={b.oracle_source} /></td>
+                <td className="n" data-label={t.price}><div className="price-cell">{fmtUsd(b.price)}<SourceChip source={b.oracle_source} /></div></td>
                 <td className="n" data-label={t.totalSupplied}><div>{fmtToken(b.total_deposits, b.decimals, 2)}</div><div className="muted">{fmtUsd(b.total_deposits_usd)}</div></td>
                 <td className="n apr apr-supply" data-label={t.supplyApr}>{fmtPct(b.lending_apr, 2)}</td>
                 <td className="n" data-label={t.totalBorrowed}><div>{fmtToken(b.total_borrows, b.decimals, 2)}</div><div className="muted">{fmtUsd(b.total_borrows_usd)}</div></td>

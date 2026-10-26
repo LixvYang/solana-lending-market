@@ -50,7 +50,7 @@ export const en: { [K in keyof typeof zh]: Widen<typeof zh[K]> } = {
   tokenThypeName: 'Fixed-price test HYPE', tokenThypeDescription: 'Test HYPE fixed at $80 by the project and periodically updated on-chain; for devnet lending demos only.',
   tokenTsolName: 'Test SOL', tokenTsolDescription: 'Test SOL for lending and liquidation demos. The project controls its price.',
   tokenTusdcName: 'Test USDC', tokenTusdcDescription: 'Test stablecoin for borrowing and liquidation demos, priced at $1.',
-  sourcePyth: 'Live Pyth', sourceMock: 'Mock price', testTokenBadge: 'Test token',
+  sourcePyth: 'Live Pyth price', sourceMock: 'Mock price', testTokenBadge: 'Test token',
   xrayTitle: 'Transaction details', xrayClose: 'Close', xrayCopySignature: 'Copy signature', xrayOpenExplorer: 'Open in Solana Explorer ↗', explorerLink: 'Explorer ↗',
   xrayHowTitle: 'How to read this transaction', xrayRawBytes: 'Raw on-chain bytes', xrayRawExplanation: 'The data stored in the transaction, highlighted by field', xrayDecoded: 'Decoded result', xrayDecodedExplanation: 'IDL-decoded fields; hover over a segment to highlight both views', xrayDatabaseRow: 'Database row', xrayDatabaseExplanation: 'How the data is stored in the database',
   xrayLoading: 'Loading…', xrayMissingRow: '(No matching row)', xrayDecodeError: (error) => `Decode error: ${error}`,

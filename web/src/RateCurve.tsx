@@ -16,19 +16,19 @@ function RateTooltip({ active, payload }: { active?: boolean; payload?: { payloa
   if (!active || !point) return null;
   return <div className="tip">
     <div className="muted">{t.utilization} {fmtPct(point.utilization, 2)}</div>
-    <div className="row"><i className="key" style={{ background: 'var(--chart-borrow)' }} /><b>{fmtPct(point.borrowing_apr, 2)}</b><span>{t.borrowApr}</span></div>
-    <div className="row"><i className="key" style={{ background: 'var(--chart-deposit)' }} /><b>{fmtPct(point.lending_apr, 2)}</b><span>{t.supplyApr}</span></div>
+    <div className="row"><i className="key" style={{ background: 'var(--borrow-line)' }} /><b>{fmtPct(point.borrowing_apr, 2)}</b><span>{t.borrowApr}</span></div>
+    <div className="row"><i className="key" style={{ background: 'var(--supply-line)' }} /><b>{fmtPct(point.lending_apr, 2)}</b><span>{t.supplyApr}</span></div>
   </div>;
 }
 
 export function RateCurve({ curve, optimalUtilization }: { curve: RateCurveView; optimalUtilization?: number }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const { top: yMax } = niceScale(Math.max(...curve.points.map((point) => Math.max(point.borrowing_apr, point.lending_apr)), 0.01));
   return <div>
     <div className="label rate-legend">
-      <span><i className="key" style={{ background: 'var(--chart-borrow)' }} />{t.borrowApr}</span>
-      <span><i className="key" style={{ background: 'var(--chart-deposit)' }} />{t.supplyApr}</span>
-      <span className="muted">{t.utilization} {fmtPct(curve.current.utilization)} → {t.borrow} {fmtPct(curve.current.borrowing_apr)}, {t.supply} {fmtPct(curve.current.lending_apr)}</span>
+      <span><i className="key" style={{ background: 'var(--borrow-line)' }} />{t.borrowApr}</span>
+      <span><i className="key" style={{ background: 'var(--supply-line)' }} />{t.supplyApr}</span>
+      <span className="muted rate-now">{t.utilization} {fmtPct(curve.current.utilization)} → {t.borrow} <span className="apr-borrow">{fmtPct(curve.current.borrowing_apr)}</span>{locale === 'zh' ? '，' : ', '}{t.supply} <span className="apr-supply">{fmtPct(curve.current.lending_apr)}</span></span>
     </div>
     <div className="rate-plot chart"><ResponsiveContainer width="100%" height={280}>
       <LineChart data={curve.points} margin={{ top: 12, right: 16, bottom: 8, left: 8 }}>
@@ -38,13 +38,13 @@ export function RateCurve({ curve, optimalUtilization }: { curve: RateCurveView;
         <Tooltip content={<RateTooltip />} cursor={{ stroke: 'var(--slate-8)', strokeDasharray: '3 3' }} />
         {optimalUtilization != null && <ReferenceLine x={optimalUtilization} stroke="var(--slate-8)" strokeDasharray="4 3" label={{ value: t.optimal, fill: 'var(--slate-11)', fontSize: 12, position: 'insideTop' }} />}
         <ReferenceLine x={curve.current.utilization} stroke="var(--slate-8)" strokeDasharray="2 3" />
-        <Line dataKey="borrowing_apr" name={t.borrowApr} type="linear" stroke="var(--chart-borrow)" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: 'var(--chart-borrow)', stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={false} />
-        <Line dataKey="lending_apr" name={t.supplyApr} type="linear" stroke="var(--chart-deposit)" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: 'var(--chart-deposit)', stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={false} />
-        <ReferenceDot x={curve.current.utilization} y={curve.current.borrowing_apr} r={5} fill="var(--chart-borrow)" stroke="var(--surface)" strokeWidth={2} />
-        <ReferenceDot x={curve.current.utilization} y={curve.current.lending_apr} r={5} fill="var(--chart-deposit)" stroke="var(--surface)" strokeWidth={2} />
+        <Line dataKey="borrowing_apr" name={t.borrowApr} type="linear" stroke="var(--borrow-line)" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: 'var(--borrow-line)', stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={false} />
+        <Line dataKey="lending_apr" name={t.supplyApr} type="linear" stroke="var(--supply-line)" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: 'var(--supply-line)', stroke: 'var(--surface)', strokeWidth: 2 }} isAnimationActive={false} />
+        <ReferenceDot x={curve.current.utilization} y={curve.current.borrowing_apr} r={5} fill="var(--borrow-line)" stroke="var(--surface)" strokeWidth={2} />
+        <ReferenceDot x={curve.current.utilization} y={curve.current.lending_apr} r={5} fill="var(--supply-line)" stroke="var(--surface)" strokeWidth={2} />
       </LineChart>
     </ResponsiveContainer></div>
     <details className="data"><summary>{t.showDataTable}</summary><div className="tablewrap"><table><thead><tr><th>{t.utilization}</th><th className="n">{t.borrowApr}</th><th className="n">{t.supplyApr}</th></tr></thead>
-      <tbody>{curve.points.map((point) => <tr key={point.utilization}><td>{fmtPct(point.utilization, 0)}</td><td className="n">{fmtPct(point.borrowing_apr, 2)}</td><td className="n">{fmtPct(point.lending_apr, 2)}</td></tr>)}</tbody></table></div></details>
+      <tbody>{curve.points.map((point) => <tr key={point.utilization}><td>{fmtPct(point.utilization, 0)}</td><td className="n apr-borrow">{fmtPct(point.borrowing_apr, 2)}</td><td className="n apr-supply">{fmtPct(point.lending_apr, 2)}</td></tr>)}</tbody></table></div></details>
   </div>;
 }

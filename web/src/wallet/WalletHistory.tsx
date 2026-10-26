@@ -9,6 +9,7 @@ import { errorText, useT } from '../i18n';
 export function WalletHistory({ wallet, reload, onOpenTx }: { wallet: string; reload: number; onOpenTx: (signature: string) => void }) {
   const { t, locale } = useT();
   const names: Record<WalletHistoryItem['kind'], string> = { deposit: t.operationSupply, borrow: t.operationBorrow, repay: t.operationRepay, withdraw: t.operationWithdraw, liquidated: t.operationLiquidated, liquidator: t.operationLiquidator, swap: t.operationSwap, faucet: t.operationFaucet };
+  const operationKind: Record<WalletHistoryItem['kind'], string> = { deposit: 'supply', withdraw: 'supply', borrow: 'borrow', repay: 'borrow', liquidated: 'risk', liquidator: 'risk', swap: 'admin', faucet: 'admin' };
   const timeText = (time: string | null) => time ? new Date(time).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
   const [page, setPage] = useState<WalletHistoryPage | null>(null), [error, setError] = useState<string | null>(null), [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -35,7 +36,7 @@ export function WalletHistory({ wallet, reload, onOpenTx }: { wallet: string; re
     {page?.items.length === 0 && <p className="muted">{t.noRecords}</p>}
     {page && page.items.length > 0 && <div className="wallet-history-list">{page.items.map((item, i) => <div className="wallet-history-row" key={`${item.signature}:${i}`}>
       <time className="muted" dateTime={item.time ?? undefined}>{timeText(item.time)}</time>
-      <b>{names[item.kind]}</b>
+      <b><span className={`ix ${operationKind[item.kind]}`}>{names[item.kind]}</span></b>
       <div className="wallet-history-assets">{item.assets.map((asset, n) => <span key={`${asset.symbol}:${n}`}>
         <TokenIcon symbol={asset.symbol} size={16} />{fmtToken(asset.amount, asset.decimals, 4)} {asset.symbol}
         {item.kind === 'swap' && n === 0 && <span className="muted"> → </span>}

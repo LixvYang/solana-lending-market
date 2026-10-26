@@ -42,7 +42,7 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
     const debt = action === 'borrow';
     const amount = debt ? balance.borrow : balance.deposit;
     const usd = debt ? balance.borrow_usd : balance.deposit_usd;
-    return <li key={balance.bank}><TokenName symbol={balance.label} size={28} sub={debt ? t.debt : t.supply} />
+    return <li key={balance.bank}><TokenName symbol={balance.label} size={28} sub={<span className={debt ? 'apr-borrow' : 'apr-supply'}>{fmtPct(debt ? bank?.borrowing_apr ?? null : bank?.lending_apr ?? null, 2)} {debt ? t.borrowApr : t.supplyApr}</span>} />
       <span className="n"><b className={debt ? 'bad-text' : ''}>{debt ? '−' : ''}{fmtToken(amount, bank?.decimals ?? 0, 4)}</b><span className="muted">{fmtUsd(usd)}</span></span>
       <button className="btn sm" onClick={() => goMarket(balance.label, debt ? 'repay' : 'withdraw')}>{debt ? t.repay : t.withdraw}</button>
     </li>;
@@ -87,14 +87,14 @@ export function WalletPanel({ banks, accounts, accountsReady, onTransaction, onG
         </>}
         <section className="card"><h2>{t.supplyAssets}</h2><ul className="asset-list">{banks.map((bank) => {
           const token = wallet?.tokens.find((item) => item.mint === bank.mint);
-          return <li key={bank.address}><TokenName symbol={bank.label} size={28} sub={`${fmtPct(bank.lending_apr, 2)} ${t.supplyApr}`} />
+          return <li key={bank.address}><TokenName symbol={bank.label} size={28} sub={<span className="apr-supply">{fmtPct(bank.lending_apr, 2)} {t.supplyApr}</span>} />
             <span className="n"><b>{token ? fmtToken(token.amount, token.decimals, 4) : '—'}</b><span className="muted">{t.walletBalance}</span></span>
             <button className="btn sm" onClick={() => goMarket(bank.label, 'deposit')}>{t.supplyButton}</button>
           </li>;
         })}</ul></section>
         <section className="card"><h2>{t.borrowAssetsTitle}</h2>{!deposits.length ? <p className="muted">{t.supplyCollateralFirst}</p> : <ul className="asset-list">{banks.map((bank) => {
           const maximum = borrowLimit(bank);
-          return <li key={bank.address}><TokenName symbol={bank.label} size={28} sub={`${fmtPct(bank.borrowing_apr, 2)} ${t.borrowApr}`} />
+          return <li key={bank.address}><TokenName symbol={bank.label} size={28} sub={<span className="apr-borrow">{fmtPct(bank.borrowing_apr, 2)} {t.borrowApr}</span>} />
             <span className="n"><b>{fmtToken(maximum, bank.decimals, 4)}</b><span className="muted">{t.availableBorrowAmount}</span></span>
             <button className="btn sm" disabled={BigInt(maximum) === 0n} onClick={() => goMarket(bank.label, 'borrow')}>{t.borrowButton}</button>
           </li>;

@@ -88,7 +88,7 @@ export function ActionForm({ banks, bank, mine, wallet, initialAction, onTransac
       <div className="swap-row"><input className="amount" inputMode="decimal" placeholder="0" value={all ? t.all : amount} onChange={(e) => { setAll(false); setAmount(e.target.value); }} aria-label={t.amount} />
         <span className="asset-fixed"><b>{bank.label}</b></span></div>
       <div className="swap-row muted"><span>{native && bank.price != null ? fmtUsd(Number(native) / 10 ** bank.decimals * bank.price) : ' '}</span>
-        <span>{action === 'borrow' ? t.borrowAprText(fmtPct(bank.borrowing_apr, 2)) : action === 'deposit' ? t.supplyAprText(fmtPct(bank.lending_apr, 2)) : ''}</span></div>
+        <span className={action === 'borrow' ? 'apr-borrow' : action === 'deposit' ? 'apr-supply' : ''}>{action === 'borrow' ? t.borrowAprText(fmtPct(bank.borrowing_apr, 2)) : action === 'deposit' ? t.supplyAprText(fmtPct(bank.lending_apr, 2)) : ''}</span></div>
     </div>
     {action === 'borrow' && position && position.deposit !== '0' && <p className="hint">{t.depositOffsetsDebt(bank.label)}</p>}
     {!all && amount && !native && <p className="notice bad">{t.invalidPrecision(bank.decimals)}</p>}

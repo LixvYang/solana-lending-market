@@ -28,9 +28,9 @@ export function Markets({ pool }: { pool: PoolView }) {
                 <td data-label={t.asset}><TokenName symbol={b.label} /></td>
                 <td className="n" data-label={t.price}><div>{fmtUsd(b.price)}</div><SourceChip source={b.oracle_source} /></td>
                 <td className="n" data-label={t.totalSupplied}><div>{fmtToken(b.total_deposits, b.decimals, 2)}</div><div className="muted">{fmtUsd(b.total_deposits_usd)}</div></td>
-                <td className="n apr good" data-label={t.supplyApr}>{fmtPct(b.lending_apr, 2)}</td>
+                <td className="n apr apr-supply" data-label={t.supplyApr}>{fmtPct(b.lending_apr, 2)}</td>
                 <td className="n" data-label={t.totalBorrowed}><div>{fmtToken(b.total_borrows, b.decimals, 2)}</div><div className="muted">{fmtUsd(b.total_borrows_usd)}</div></td>
-                <td className="n apr" data-label={t.borrowApr}>{fmtPct(b.borrowing_apr, 2)}</td>
+                <td className="n apr apr-borrow" data-label={t.borrowApr}>{fmtPct(b.borrowing_apr, 2)}</td>
                 <td data-label={t.utilization}>
                   <div className="util"><div className={`meter ${b.utilization > 0.95 ? 'crit' : b.utilization > 0.8 ? 'warn' : ''}`}><i style={{ width: `${Math.min(100, b.utilization * 100)}%` }} /></div>
                     <span>{fmtPct(b.utilization)}</span></div>

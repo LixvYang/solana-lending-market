@@ -34,8 +34,8 @@ export function AssetPage({ bank, banks, mine, wallet, curve, history, historyEr
           <div className="asset-price"><div className="stat">{fmtUsd(bank.price)}</div><div className="muted">{bank.price_updated_at ? t.updatedAt(fmtTime(bank.price_updated_at, locale)) : t.noPriceSnapshot}</div></div>
         </div>
         <div className="asset-kpis">
-          <div><span className="label">{t.supplyApr}</span><b>{fmtPct(bank.lending_apr, 2)}</b></div>
-          <div><span className="label">{t.borrowApr}</span><b>{fmtPct(bank.borrowing_apr, 2)}</b></div>
+          <div><span className="label">{t.supplyApr}</span><b className="apr-supply">{fmtPct(bank.lending_apr, 2)}</b></div>
+          <div><span className="label">{t.borrowApr}</span><b className="apr-borrow">{fmtPct(bank.borrowing_apr, 2)}</b></div>
           <div><span className="label">{t.totalSupplied}</span><b>{fmtUsd(bank.total_deposits_usd)}</b></div>
           <div><span className="label">{t.utilization}</span><b>{fmtPct(bank.utilization)}</b></div>
         </div>

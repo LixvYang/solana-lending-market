@@ -5,7 +5,10 @@
   --ink: var(--slate-12); --ink-2: var(--slate-11); --ink-3: var(--slate-11);
   --grid: var(--slate-6); --axis: var(--slate-7); --ring: color-mix(in srgb, var(--slate-12) 12%, transparent);
   --s1: var(--blue-9); --s2: var(--orange-9); --s3: var(--green-9); --s4: var(--amber-9);
-  --chart-borrow: var(--blue-9); --chart-deposit: var(--orange-10);
+  --supply: color-mix(in srgb, var(--green-11) 85%, var(--green-12));
+  --borrow: color-mix(in srgb, var(--amber-11) 85%, var(--amber-12));
+  --supply-bg: var(--green-3); --borrow-bg: var(--amber-3);
+  --supply-line: var(--green-9); --borrow-line: var(--amber-11); --chart-util: var(--blue-9);
   --s5: var(--red-9); --s6: var(--green-11); --s7: var(--violet-9); --s8: var(--red-9);
   --track: var(--blue-3); --fill: var(--blue-9);
   --good: var(--green-11); --warning: var(--amber-9); --warning-text: var(--amber-12);
@@ -31,7 +34,7 @@ h1 { font-size: 24px; margin: 0; font-weight: 600; }
 .card h2 { font-size: 14px; margin: 0 0 12px; font-weight: 600; }
 .card h2 small { font-size: 12px; font-weight: 400; color: var(--ink-3); margin-left: 8px; }
 .grid { display: grid; gap: 16px; }
-.kpis { grid-template-columns: 1.4fr 1fr 1fr 1fr; margin-bottom: 16px; }
+.kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
 .kpis .card > .muted { font-size: 12px; margin-top: 4px; }
 .portfolio-grid { grid-template-columns: 1fr 1fr; align-items: start; }
 @media (max-width: 860px) { .kpis { grid-template-columns: 1fr 1fr; } .portfolio-grid { grid-template-columns: 1fr; } .hero { font-size: 24px; } }
@@ -76,8 +79,11 @@ tbody tr.pick:hover td { background: var(--slate-3); }
 .chip.ok { color: var(--good-text); } .chip.bad { color: var(--critical); }
 /* 指令中文名:按资金动作着色(存取 / 借还 / 清算 / 管理) */
 .ix { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 4px; white-space: nowrap; --c: var(--ink-3); color: var(--c); background: var(--slate-3); }
-.ix.supply { --c: var(--green-11); background: var(--green-3); } .ix.borrow { --c: var(--blue-11); background: var(--blue-3); } .ix.risk { --c: var(--red-11); background: var(--red-3); }
+.ix.supply { --c: var(--supply); background: var(--supply-bg); } .ix.borrow { --c: var(--borrow); background: var(--borrow-bg); } .ix.risk { --c: var(--red-11); background: var(--red-3); }
+.apr-supply { color: var(--supply); } .apr-borrow { color: var(--borrow); }
 table.activity td .mono.muted { font-size: 12px; margin-top: 2px; }
+table.activity td { vertical-align: middle; }
+table.activity td .amt { min-height: 20px; vertical-align: middle; }
 td.go { color: var(--ink-3); font-size: 12px; white-space: nowrap; text-align: right; }
 tbody tr.pick:hover td.go { color: var(--s1); }
 
@@ -163,7 +169,7 @@ table.markets td { padding: 12px 14px; }
 table.markets td.n > div:first-child { font-variant-numeric: tabular-nums; }
 table.markets .muted { font-size: 12px; }
 table.markets .apr { font-weight: 600; font-variant-numeric: tabular-nums; }
-table.markets .apr.good { color: var(--good-text); }
+table.markets .apr-supply { color: var(--supply); } table.markets .apr-borrow { color: var(--borrow); }
 table.markets td .src { margin-top: 3px; }
 .util { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .util .meter { width: 64px; margin: 0; height: 6px; }
@@ -269,11 +275,12 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .portfolio-lists .asset-list li { min-width: 0; }
 .portfolio-lists .asset-list .n { min-width: 56px; }
 .wallet-history-list { display: grid; }
-.wallet-history-row { display: grid; grid-template-columns: 90px 72px minmax(0, 1fr) 52px auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 0; border-top: 0.5px solid var(--slate-6); font-size: 14px; }
+.wallet-history-row { display: grid; grid-template-columns: 90px 72px minmax(0, 1fr) 72px 128px; align-items: center; gap: 10px; min-width: 0; padding: 10px 0; border-top: 0.5px solid var(--slate-6); font-size: 14px; }
 .wallet-history-row time { font-size: 12px; white-space: nowrap; }
 .wallet-history-assets { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .wallet-history-assets > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .wallet-history-row > span:nth-last-child(2) { color: var(--good); }
+.wallet-history-row > :last-child { justify-self: end; white-space: nowrap; }
 @media (max-width: 640px) { .wallet-history-row { grid-template-columns: 1fr auto; gap: 6px 10px; } .wallet-history-row time { grid-column: 1; } .wallet-history-row > b { grid-column: 1; } .wallet-history-assets { grid-column: 1 / -1; } .wallet-history-row > span:nth-last-child(2) { grid-column: 1; } }
 @media (max-width: 640px) {
   .portfolio-lists { grid-template-columns: minmax(0, 1fr); }
@@ -302,6 +309,8 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .history-plot .recharts-tooltip-wrapper .tip .row, .rate-plot .recharts-tooltip-wrapper .tip .row { justify-content: space-between; }
 .rate-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; }
 .rate-legend > span { display: inline-flex; align-items: center; }
+/* 摘要里夹着着色数字;flex 会吞掉元素间的空格，这一项保持普通行内排版。 */
+.rate-legend > span.rate-now { display: inline; }
 .risk-preview { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--slate-3); }
 .risk-health { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .risk-health > div { display: flex; flex-direction: column; }
@@ -363,7 +372,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .net.mock { color: var(--amber-11); background: var(--amber-3); }
 
 /* 绝对定位的提示框靠近容器右边缘时会被压窄(文字竖排);按内容宽度撑开、不换行。 */
-:root[data-theme='dark'] { --chart-deposit: var(--orange-8); }
+:root[data-theme='dark'] { --supply: var(--green-11); --borrow: var(--amber-11); --borrow-line: color-mix(in srgb, var(--amber-9) 50%, var(--amber-7)); }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme='light'])) { --chart-deposit: var(--orange-8); }
+  :root:where(:not([data-theme='light'])) { --supply: var(--green-11); --borrow: var(--amber-11); --borrow-line: color-mix(in srgb, var(--amber-9) 50%, var(--amber-7)); }
 }

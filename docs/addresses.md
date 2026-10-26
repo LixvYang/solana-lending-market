@@ -1,14 +1,25 @@
 # devnet 地址清单
 
-作者在 devnet 上的部署。全部是公开地址，不含任何密钥。浏览器查看:`https://explorer.solana.com/address/<地址>?cluster=devnet`。
+作者在 devnet 上的部署。全部是公开地址，不含任何密钥。
+
+## 线上服务
+
+| 名称 | 地址 |
+|---|---|
+| 网站(前端 + API,Vercel) | <https://solana-lending-market.vercel.app> |
+| API | `https://solana-lending-market.vercel.app/api/…`(如 `/api/pool`) |
+| 水龙头 / 兑换台 | `https://solana-lending-market.vercel.app/api/desk/…`(`/faucet`、`/faucet/config`、`/swap/*`) |
+| 数据库 | Supabase 免费版，区域 ap-south-1(孟买);连接串只在本地 `.env` 与 Vercel 环境变量 |
+
+链上地址如下。浏览器查看:`https://explorer.solana.com/address/<地址>?cluster=devnet`。
 
 ## 需要 SOL 的钱包(运维)
 
 | 钱包 | 地址 | 谁在用 | SOL 花在哪 | 余额(2026-10-24) | 建议 |
 |---|---|---|---|---|---|
-| 水龙头 / 兑换台 | `2UpAsC6XhKFzgmJZM71Wr1xb475a7JxvC34R3r6VQzNr` | `SERVICE=faucet` | 给新用户建代币账户的租金(最多 6 个，每人约 0.0123 SOL)、转账手续费;同时持有测试币库存 | 3.47 | 低于 1 SOL 补充;按默认限量(5 小时 30 份)最坏约 1.8 SOL/天 |
-| 价格维护(keeper) | `CpJMdAiA55RgtkTNm4jLqQVgP4wGHiTMgcSjGD1ETYY1` | `SERVICE=keeper` | 每 180 秒写一次 mock 价格，实测约 237 笔/天 × 0.000015 SOL ≈ 0.0036 SOL/天 | 0.093(约 26 天) | 补到 0.5 SOL 可用约 140 天 |
-| 管理员(部署者) | `6LzQJAR4A7KRcSHYhBhXdv4pcUuzAQtAfMMhoGDZ8NL9` | 只在本机跑管理脚本(建银行、改预言机、剧本) | 部署与配置交易 | 8.02 | **不部署到服务器** |
+| 水龙头 / 兑换台 | `2UpAsC6XhKFzgmJZM71Wr1xb475a7JxvC34R3r6VQzNr` | 线上 Vercel 函数(`FAUCET_SECRET_KEY`);容器部署时 `SERVICE=faucet` | 给新用户建代币账户的租金(最多 6 个，每人约 0.0123 SOL)、转账手续费;同时持有测试币库存 | 3.56 | 低于 1 SOL 补充;按默认限量(5 小时 30 份)最坏约 1.8 SOL/天 |
+| 价格维护(keeper) | `CpJMdAiA55RgtkTNm4jLqQVgP4wGHiTMgcSjGD1ETYY1` | 只在容器部署或本机运行;**线上 Vercel 不需要**(借款/取款交易自带价格刷新) | 每 180 秒写一次 mock 价格，实测约 237 笔/天 × 0.000015 SOL ≈ 0.0036 SOL/天 | 20.09 | 足够多年 |
+| 管理员(部署者) | `6LzQJAR4A7KRcSHYhBhXdv4pcUuzAQtAfMMhoGDZ8NL9` | 只在本机跑管理脚本(建银行、改预言机、剧本) | 部署与配置交易 | 7.96 | **不部署到服务器** |
 
 补充 SOL(从你自己的 devnet 钱包转):
 

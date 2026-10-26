@@ -95,6 +95,8 @@ Compose 启动后，API 在 8787、兑换台/水龙头在 8788 监听；生产�
 
 ## Vercel + Supabase 全免费部署
 
+**当前线上部署就是这一种:<https://solana-lending-market.vercel.app>**(Vercel 项目 `solana-lending-market`,关联 GitHub,合并到 `main` 自动发布正式版;函数区域 `bom1`,与 Supabase ap-south-1 同区)。
+
 这条路径在一个 Vercel Hobby 项目里同时发布 `web/` 静态前端与根目录 `api/main.ts` Node 函数(`vercel.json` 把 `/api/*` 改写到它，原路径经 `__path` 参数还原;非 Next.js 项目的 `[...path]` 只匹配一段路径)；Supabase Free 提供 Postgres。它不运行常驻 keeper/ingest：mock 价格由用户借款/取款交易顺带刷新，按请求跟随链上新交易。容器与常驻主机部署仍可照上文使用。
 
 在 Vercel 项目选择 Hobby 计划、仓库根目录，使用根目录 `vercel.json` 的安装/构建设置。设置以下环境变量：

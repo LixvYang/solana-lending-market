@@ -6,6 +6,8 @@
 
 > 状态:**主线 M0–M5 已完成并在真实 devnet 上验收**(见 [docs/progress.md](docs/progress.md))。视频与分镜([video/](video/))待录制。
 
+**在线体验:<https://solana-lending-market.vercel.app>**(devnet,测试币没有真实价值)。连接 devnet 钱包后可领测试币、存借、兑换。部署方式见 [docs/deploy.md](docs/deploy.md#vercel--supabase-全免费部署),链上地址见 [docs/addresses.md](docs/addresses.md)。
+
 文档同步约定：功能与架构变动同时更新 README、相关 folder.md 和源码 INPUT/OUTPUT/POSITION 注释。
 
 ## 你会得到什么

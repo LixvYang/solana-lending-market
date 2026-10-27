@@ -27,6 +27,15 @@ fi
 git -C "$SRC" checkout -q -f "$UPSTREAM_TAG"
 git -C "$SRC" clean -fdq programs
 
+# 1b. mocks 程序用本仓库的覆盖版(D-029):改价要价格管理员签名，新增任何人可调的 refresh_timestamp。
+#   PRICE_ADMIN 默认取 ANCHOR_WALLET 的公钥;MOCKS_WRITE_AUTH=open 只用于三步上线的中间那一步(write 暂不检查管理员)。
+PRICE_ADMIN="${PRICE_ADMIN:-$( [ -n "${ANCHOR_WALLET:-}" ] && solana-keygen pubkey "$ANCHOR_WALLET" )}"
+[ -n "$PRICE_ADMIN" ] || { echo "需要 PRICE_ADMIN 或 ANCHOR_WALLET(价格管理员)" >&2; exit 1; }
+MOCKS_WRITE_AUTH="${MOCKS_WRITE_AUTH:-enforce}"
+case "$MOCKS_WRITE_AUTH" in enforce) ENFORCE=true ;; open) ENFORCE=false ;; *) echo "MOCKS_WRITE_AUTH 只能是 enforce 或 open" >&2; exit 1 ;; esac
+cp "$ROOT/mocks-lib.rs" "$SRC/programs/mocks/src/lib.rs"
+perl -pi -e "s/__PRICE_ADMIN__/$PRICE_ADMIN/g; s/__ENFORCE_WRITE_AUTHORITY__/$ENFORCE/g" "$SRC/programs/mocks/src/lib.rs"
+
 # 2. 生成自己的 program keypair(已存在则复用,保证地址稳定)
 for name in marginfi mocks; do
   [ -f "$OUT/keys/$name.json" ] || solana-keygen new --no-bip39-passphrase -s -o "$OUT/keys/$name.json" >/dev/null

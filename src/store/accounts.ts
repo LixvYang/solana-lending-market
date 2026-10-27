@@ -4,6 +4,7 @@
  * POSITION: EP6 当前状态采集；变化快照用于历史曲线，但采样间隔内的状态不保证完整。SYNC: 同步 folder.md。
  */
 import { readFileSync } from 'node:fs';
+import deployment from '../../program/devnet.json';
 import { resolve } from 'node:path';
 import { decodePullFeed, DISCRIMINATOR } from '../decoder/switchboard';
 import { decodePriceUpdate, DISCRIMINATOR as PYTH_DISCRIMINATOR } from '../decoder/pyth';
@@ -85,6 +86,17 @@ export function oracleOwners(config = process.env.ORACLE_OWNERS, idsPath = resol
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }
   return owners;
+}
+/**
+ * mock 价格账户的 owner(mocks 程序)。本地自建时以 program/out/program-ids.json 为准;
+ * 否则用随代码打包的作者部署地址——必须静态 import:Vercel 函数只打包被 import 的文件，运行时按路径 readFileSync 会 ENOENT。
+ */
+export function mockOracleOwner(idsPath = resolve('program/out/program-ids.json')): string {
+  try {
+    const ids = JSON.parse(readFileSync(idsPath, 'utf8'));
+    if (typeof ids.mocks === 'string' && ids.mocks) return ids.mocks;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  return deployment.mocks;
 }
 /** owner 或布局错误拒绝整批，不把外部账户内容当价格。缺失账户报告后保留历史快照。 */
 export async function snapshotOracles(db: Db, rpc: AccountRpc, addresses: string[], owners = oracleOwners()): Promise<number> {

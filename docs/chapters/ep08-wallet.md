@@ -28,9 +28,9 @@
 |---|---|---|---|
 | **用户钱包** | 用户自己的钱包 | 自己的交易,并付手续费 | 只能动自己的资产 |
 | **一次性 marginfi 账户密钥** | 构建接口里临时生成,不落盘 | 只签"创建这个账户" | 无 |
-| **公开的价格账户密钥** | 由固定字符串派生,**公开** | 刷新价格时间戳(随用户的借款/取款交易) | 任何人本来就能写,所以不构成新风险 |
+| **价格账户地址** | 由固定字符串派生,地址公开 | 任何人可刷新时间戳;不签名 | 只更新新鲜度,不能更改价格 |
 | **水龙头专用钱包** | 只在水龙头进程里 | 转账测试币 | 最多转走水龙头里有的那点测试币 |
-| **管理员钱包**(group admin、mint authority) | **只在命令行工具里**(`faucet-setup`;可选的 `price-keeper`) | 铸币、写价格 | **绝不进任何常驻的、对外的服务** |
+| **管理员钱包**(group admin、mint authority、mock 价格管理员) | **只在命令行工具里**(`faucet-setup`、改价脚本) | 铸币、写价格 | **绝不进任何常驻的、对外的服务** |
 
 API 进程里没有管理员密钥。转发接口还会拒绝:交易里没有 marginfi 指令的、手续费付款人没有签名的、含地址表的、超过 1232 字节的、签名无法通过 Ed25519 验证的——它不是一个"任意交易中继"。
 
@@ -42,14 +42,13 @@ API 进程里没有管理员密钥。转发接口还会拒绝:交易里没有 ma
 ```ts
 // 账户不是 PDA；唯一一次性 keypair 只签自己的创建，不为用户付费，也不落盘。
 const fresh = user ? null : Keypair.generate(), account = user ? new PublicKey(user.address) : fresh!.publicKey;
-for (const r of refresh) instructions.push(refreshTimestampIx(r.program, r.feed, now));
+for (const r of refresh) instructions.push(refreshTimestampIx(r.program, r.feed));
 if (fresh) instructions.push(await initInstruction(group, account, wallet));
 const amount = request.all ? 0n : BigInt(request.amount);
 instructions.push(await lendingInstruction(request.action, group, account, wallet, target, ata, amount, request.all === true, metas));
 const latest = await services.rpc.getLatestBlockhash('confirmed');
 const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: latest.blockhash, instructions }).compileToV0Message());
-const preSigners = [...(fresh ? [fresh] : []), ...refresh.map(r => r.signer)];
-if (preSigners.length) tx.sign(preSigners); // 一次性账户与公开的价格账户由服务端代签;用户的签名由钱包补上
+if (fresh) tx.sign([fresh]); // 仅一次性账户由服务端代签;用户的签名由钱包补上
 ```
 <!-- /snippet -->
 
@@ -229,18 +228,18 @@ if (!(current.config.oracleKeys[0] as PublicKey).equals(feedIdAsKey(FEED_IDS[ass
 
 > **后续增补**(第 8 集代码定稿 `ep8-end` 之后才加的,只在 `main` 上,各集 tag 里没有):D-017。`ep8-end` 时的版本用的是后台价格维护进程(`scripts/price-keeper.ts`,仍保留但已不是必需)。
 
-marginfi 要求价格在 `oracle_max_age`(我们配的是 240 秒)内更新过,否则借款和取款会失败。真实的 Switchboard 靠 oracle 持续推送;我们用的是 mock 价格(EP3),需要有人定时把价格账户的时间戳重写一次。
+marginfi 要求价格在 `oracle_max_age`(我们配的是 240 秒)内更新过,否则借款和取款会失败。真实的 Switchboard 靠 oracle 持续推送;我们用的是 mock 价格(EP3),需要有人定时刷新价格账户的时间戳。
 
 **最初的做法是一个后台"价格维护进程"**,每 60 秒刷新一次。它上线不久就暴露了问题:连续 5 次刷新失败后它按设计退出了,价格 8 个多小时没更新,用户借款时看到"价格维护进程没有运行"。**这种错误不该让用户感知,更不该依赖一个会挂掉的进程。**
 
-现在的做法:构建借款/取款交易时,如果价格账户的时间戳不够新(超过 30 秒),服务端**直接在这笔交易里加一条"刷新时间戳"的指令**:
+现在的做法:构建借款/取款交易时,如果 mock 价格账户的时间戳不够新(超过 30 秒),服务端**直接在这笔交易里加一条 `refresh_timestamp` 指令**。链上程序从 Clock 取时间;feed 地址可写但不要求签名:
 
 <!-- snippet: src/api/builder/index.ts#ep8-price-refresh -->
 ```ts
-// 借款/取款要求价格新鲜。价格由谁来保鲜不该让用户操心:如果价格账户是我们自己的 mock(密钥公开派生),
-// 就在这笔交易里顺手把时间戳刷新到当前链上时间——价格数值不动,手续费包含在用户这笔交易里。
+// 借款/取款要求价格新鲜。mock 账户只允许公开刷新时间戳，价格写入仍要求管理员授权。
+// 用户交易可以代为刷新新鲜度，不再携带 feed 私钥或改价权限。
 // 这样不依赖任何后台进程;进程挂了、刚重启、网络抖动都不会让用户看到"价格过期"。
-const refresh: { feed: PublicKey; program: PublicKey; signer: Keypair }[] = [];
+const refresh: { feed: PublicKey; program: PublicKey }[] = [];
 let now = 0n;
 if (request.action === 'borrow' || request.action === 'withdraw') {
   now = await clusterTime(services);
@@ -256,25 +255,26 @@ if (request.action === 'borrow' || request.action === 'withdraw') {
       if (pyth.verification !== 'Full' || now - pyth.publish_time > BigInt(config.oracle_max_age)) throw new PriceStale('Pyth 价格暂未更新，请过一两分钟再试。');
       continue;
     }
-    const price = decodePullFeed(feed.data);
+    if (!feed.owner.equals(new PublicKey(mockOracleOwner()))) throw new PriceStale();
+    let price;
+    try { price = decodePullFeed(feed.data); } catch { throw new PriceStale(); }
     if (!price.sample_size) throw new PriceStale(); // 从未有过价格:没有可保鲜的值
     const age = now - price.last_update_timestamp;
     if (age <= REFRESH_AFTER_SECONDS && age >= 0n) continue; // 够新,不动(正常运行时这笔交易保持最小)
-    const signer = mockFeedSigner(feedKey);
-    if (!signer) throw new PriceStale(); // 不是我们的 mock(比如真实预言机):不能代为刷新
-    refresh.push({ feed: feedKey, program: feed.owner, signer });
+    refresh.push({ feed: feedKey, program: feed.owner });
   }
 }
 ```
 <!-- /snippet -->
 
-- **只写 8 字节的时间戳**,价格数值一个字节都不动。测试里断言写入偏移落在时间戳字段上,没有碰到结果值区域。
-- **价格账户的密钥是公开派生的**(`feed/tSOL`、`feed/tUSDC`),服务端可以代签;手续费包含在用户这笔交易里。这不是新风险:这些密钥本来就是公开的,任何人都能写这些价格(这是 mock 的性质)。
+- **刷新只改新鲜度字段**,价格值不变。价格账户地址不是密钥,交易里没有价格账户签名。
+- **`write(offset, data)` 要求管理员授权**:目标 feed 仍签名,第二个账户必须由部署者价格管理员 `6LzQ…NL9` 签名。用户交易和 keeper 都不能改价。
+- **keeper 只负责刷新时间戳**,批量发一笔交易,只用自己的手续费钱包;不读价格数值、不签名 feed、不持管理员密钥。
 - **用链上时间,不用本机时间**,避免本机时钟偏快写出"未来"的时间戳。
-- **只有真正无法刷新时才报错**:价格账户不存在、从未有过价格、价格账户不是我们的 mock(比如将来换成真实预言机),此时提示"价格暂时不可用,请稍后重试",不提内部细节。
-- **验证方式**:把价格维护进程**关掉**,价格过期 140 秒以上,再用全新钱包走完 借款、还款、取款——全部通过。借款的计算单元从 51,503 增加到 53,216,多出来的就是两条刷新指令。
+- **只有已初始化的 mocks PullFeed 可刷新**。价格账户不存在、从未有过价格、owner 或 discriminator 不匹配时,提示"价格暂时不可用,请稍后重试",不提内部细节。
+- **验证方式**:离线测试确认 builder/keeper 只生成 `refresh_timestamp`,feed 不是签名者;管理员 `write` 的账户顺序与签名标记也有测试。部署与 devnet 联调由 Claude 完成。
 
-`scripts/price-keeper.ts` 还保留着,但**不再是必需的**。
+`scripts/price-keeper.ts` 仍作为兜底刷新器保留;线上 Vercel 不运行它,借款/取款交易会自行刷新时间戳。
 
 ## 页面多快能反映出你刚发的交易(后续增补)
 

@@ -5,8 +5,8 @@ import type { Db } from '../../store/db';
 import { decodePullFeed } from '../../decoder/switchboard';
 import { decodePriceUpdate } from '../../decoder/pyth';
 import { isPythPush, oracleAccountOf } from '../../oracle/pyth';
-import { mockFeedSigner, refreshTimestampIx } from '../../oracle/mock-write';
-import { oracleOwners } from '../../store/accounts';
+import { refreshTimestampIx } from '../../oracle/mock-write';
+import { mockOracleOwner, oracleOwners } from '../../store/accounts';
 import { getPool } from '../queries';
 import { readState } from '../state';
 import type { BuildResponse } from '../types';
@@ -43,10 +43,10 @@ export async function buildTransaction(db: Db, services: WalletServices, input: 
   const banks = state.banks as Record<string, BuildBank>;
   const metas = observation(remaining, banks, pool.group);
   // #region ep8-price-refresh
-  // 借款/取款要求价格新鲜。价格由谁来保鲜不该让用户操心:如果价格账户是我们自己的 mock(密钥公开派生),
-  // 就在这笔交易里顺手把时间戳刷新到当前链上时间——价格数值不动,手续费包含在用户这笔交易里。
+  // 借款/取款要求价格新鲜。mock 账户只允许公开刷新时间戳，价格写入仍要求管理员授权。
+  // 用户交易可以代为刷新新鲜度，不再携带 feed 私钥或改价权限。
   // 这样不依赖任何后台进程;进程挂了、刚重启、网络抖动都不会让用户看到"价格过期"。
-  const refresh: { feed: PublicKey; program: PublicKey; signer: Keypair }[] = [];
+  const refresh: { feed: PublicKey; program: PublicKey }[] = [];
   let now = 0n;
   if (request.action === 'borrow' || request.action === 'withdraw') {
     now = await clusterTime(services);
@@ -62,13 +62,13 @@ export async function buildTransaction(db: Db, services: WalletServices, input: 
         if (pyth.verification !== 'Full' || now - pyth.publish_time > BigInt(config.oracle_max_age)) throw new PriceStale('Pyth 价格暂未更新，请过一两分钟再试。');
         continue;
       }
-      const price = decodePullFeed(feed.data);
+      if (!feed.owner.equals(new PublicKey(mockOracleOwner()))) throw new PriceStale();
+      let price;
+      try { price = decodePullFeed(feed.data); } catch { throw new PriceStale(); }
       if (!price.sample_size) throw new PriceStale(); // 从未有过价格:没有可保鲜的值
       const age = now - price.last_update_timestamp;
       if (age <= REFRESH_AFTER_SECONDS && age >= 0n) continue; // 够新,不动(正常运行时这笔交易保持最小)
-      const signer = mockFeedSigner(feedKey);
-      if (!signer) throw new PriceStale(); // 不是我们的 mock(比如真实预言机):不能代为刷新
-      refresh.push({ feed: feedKey, program: feed.owner, signer });
+      refresh.push({ feed: feedKey, program: feed.owner });
     }
   }
   // #endregion
@@ -78,14 +78,13 @@ export async function buildTransaction(db: Db, services: WalletServices, input: 
   // #region ep8-first-deposit
   // 账户不是 PDA；唯一一次性 keypair 只签自己的创建，不为用户付费，也不落盘。
   const fresh = user ? null : Keypair.generate(), account = user ? new PublicKey(user.address) : fresh!.publicKey;
-  for (const r of refresh) instructions.push(refreshTimestampIx(r.program, r.feed, now));
+  for (const r of refresh) instructions.push(refreshTimestampIx(r.program, r.feed));
   if (fresh) instructions.push(await initInstruction(group, account, wallet));
   const amount = request.all ? 0n : BigInt(request.amount);
   instructions.push(await lendingInstruction(request.action, group, account, wallet, target, ata, amount, request.all === true, metas));
   const latest = await services.rpc.getLatestBlockhash('confirmed');
   const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: latest.blockhash, instructions }).compileToV0Message());
-  const preSigners = [...(fresh ? [fresh] : []), ...refresh.map(r => r.signer)];
-  if (preSigners.length) tx.sign(preSigners); // 一次性账户与公开的价格账户由服务端代签;用户的签名由钱包补上
+  if (fresh) tx.sign([fresh]); // 仅一次性账户由服务端代签;用户的签名由钱包补上
   // #endregion
   if (tx.serialize().length > 1232) throw new ApiError(400, 'transaction exceeds 1232 bytes');
   // #region ep8-simulate

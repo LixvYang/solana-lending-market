@@ -5,29 +5,23 @@ import type { PublicKey } from '@solana/web3.js';
 import { feedInfo, mockOwner } from '../api/wallet-test-utils';
 import { priceInstruction, refreshPrices, type PriceRpc } from './price';
 import { keeperLoop, intervalMs } from './loop';
-import { OFFSET, decodePullFeed } from '../decoder/switchboard';
-import { feedKeypair } from '../../scenario/lib/mock-feed';
+import { createHash } from 'node:crypto';
+import { decodePullFeed } from '../decoder/switchboard';
 const rpc: PriceRpc = { getMultipleAccountsInfo: async keys => keys.map(() => feedInfo(1700000000, 50123456789012345678n)), getSlot: async () => 333,
   getBlockTime: async () => 1700000060 };
-test('keeper reads exact i128 price and rewrites timestamp/slot through shared resultRegion/writeIx', async () => {
+test('keeper only emits refresh_timestamp and cannot alter price bytes', async () => {
   const value = await priceInstruction(rpc, mockOwner, 'tSOL'), ix = value.instruction;
-  assert.ok(value.signer.publicKey.equals(feedKeypair('tSOL').publicKey)); assert.equal(ix.keys[0].isSigner, true);
-  assert.equal(ix.data.readBigUInt64LE(8), BigInt(OFFSET.sampleSize)); assert.equal(ix.data.readUInt32LE(16), 177);
-  const bytes = feedInfo().data; ix.data.subarray(20).copy(bytes, OFFSET.sampleSize);
-  const decoded = decodePullFeed(bytes); assert.equal(decoded.price.numerator, 50123456789012345678n);
-  assert.equal(decoded.last_update_timestamp, 1700000060n); assert.equal(decoded.slot, 333n);
-  const changed = await priceInstruction(rpc, mockOwner, 'tUSDC', 1234567890123456789n);
-  changed.instruction.data.subarray(20).copy(bytes, OFFSET.sampleSize); assert.equal(decodePullFeed(bytes).price.numerator, 1234567890123456789n);
+  assert.equal(ix.keys[0].isSigner, false); assert.equal(ix.keys[0].isWritable, true);
+  assert.deepEqual(ix.data, createHash('sha256').update('global:refresh_timestamp').digest().subarray(0, 8));
+  const bytes = feedInfo().data;
+  assert.equal(decodePullFeed(bytes).price.numerator, 50n * 10n ** 18n);
   let reads = 0, slots = 0, times = 0;
   const batchRpc = { ...rpc, getMultipleAccountsInfo: async (keys: PublicKey[]) => { reads++; return keys.map(() => feedInfo(1700000000, 50123456789012345678n)); },
     getSlot: async () => { slots++; return 333; }, getBlockTime: async () => { times++; return 1700001000; } };
-  const sent: { keys: string[]; signers: string[] }[] = [];
-  await refreshPrices(batchRpc, mockOwner, async values => { sent.push({ keys: values.map(v => v.instruction.keys[0].pubkey.toBase58()), signers: values.map(v => v.signer.publicKey.toBase58()) }); });
-  const expected = ['tUSDC', 'tSOL', 'tHYPE'].map(t => feedKeypair(t as 'tUSDC' | 'tSOL' | 'tHYPE').publicKey.toBase58());
+  const sent: string[][] = [];
+  await refreshPrices(batchRpc, mockOwner, async values => { sent.push(values.map(v => v.label)); });
   assert.equal(reads, 1); assert.equal(slots, 1); assert.equal(times, 1); assert.equal(sent.length, 1);
-  assert.deepEqual(sent[0].keys, expected); assert.deepEqual(sent[0].signers, expected);
-  const hype = await priceInstruction(rpc, mockOwner, 'tHYPE', 80_000_000_000_000_000_000n);
-  assert.ok(hype.signer.publicKey.equals(feedKeypair('tHYPE').publicKey));
+  assert.deepEqual(sent[0], ['tUSDC', 'tSOL', 'tHYPE']);
   await assert.rejects(priceInstruction({ ...rpc, getBlockTime: async () => null }, mockOwner, 'tSOL'), /time unavailable/);
   await assert.rejects(priceInstruction({ ...rpc, getMultipleAccountsInfo: async () => [null] }, mockOwner, 'tSOL'), /owner/);
 });

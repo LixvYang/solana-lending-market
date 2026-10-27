@@ -18,7 +18,7 @@ async function main() {
   process.exitCode = await keeperLoop(async () => {
     try {
       const { values, signature } = await refreshPrices(rpc, program, batch => sendInstructions(rpc, payer,
-        batch.map(value => value.instruction), batch.map(value => value.signer)));
+        batch.map(value => value.instruction)));
       try {
         const sol = (await rpc.getBalance(payer.publicKey, 'confirmed')) / 1_000_000_000;
         if (warnLow(sol, 0.02)) console.warn(`price keeper SOL balance low wallet=${payer.publicKey.toBase58()} balance=${sol.toFixed(4)} SOL`);

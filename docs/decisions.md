@@ -528,3 +528,18 @@ Supabase **Transaction pooler** 用于运行时请求；函数连接池默认 1�
 
 `TRUST_PROXY_HOPS` 的 Vercel 取值尚待真实请求头核验，部署文档暂标为待验证；Vercel 打包函数入口及相对导入、Supabase Transaction pooler 行为、Hobby 预览部署和全链路仍待 Claude 联调。具体步骤见 `docs/deploy.md`。
 
+## D-029 mock 价格写入必须由管理员授权(2026-10-27,TypeScript 已改;链上部署待完成)
+
+**漏洞。** `feed/tSOL`、`feed/tUSDC`、`feed/tHYPE` 的地址由公开字符串派生。旧 `mocks::write(offset, data)` 只要求目标 feed 签名,所以任何人都能重建该密钥并任意改写价格;虚高抵押价可导致池子被借空,低价可把其他账户推到清算线。
+
+**决定。** 链上 `write` 使用账户 `[target(可写、签名), authority(签名)]`;authority 必须是部署者价格管理员 `6LzQJAR4A7KRcSHYhBhXdv4pcUuzAQtAfMMhoGDZ8NL9`。新增无参数 `refresh_timestamp`,账户只有 `[feed(可写、不签名)]`:任何人可调用,但程序只接受自己拥有、PullFeed discriminator 正确且 `sample_size > 0` 的账户,并从链上 Clock 更新 `last_update_timestamp` 与三个 slot 字段,价格字节保持不变。管理员私钥留在本机 CLI;API、用户钱包和 keeper 均无改价能力。
+
+**TypeScript 改动。** `writeIx` 明确接收 authority 并按上述顺序编码;scenario 与管理员 CLI 传管理员地址(管理员已作为交易签名者)。构建器和 keeper 只调用 `refresh_timestamp`,不会把派生的 feed keypair 作为交易签名者;构建器仍检查实时 owner、PullFeed discriminator 与初始化状态。keeper 只读取布局/owner/时间戳以决定刷新哪些账户,一笔交易批量刷新,只用 keeper 钱包付费。`verify-pyth-bank` 也改用公开刷新指令。
+
+**不停机上线顺序(三步,须在 Claude 完成链上改动时执行):**
+1. 先准备并检查新 mocks 程序和兼容的 API/keeper/CLI 构建,确认三个 feed 都已初始化且时间戳新鲜;旧服务继续运行,不重建 feed、不改 bank 地址。
+2. 在 feeds 新鲜时升级 mocks 程序。升级原子生效,已有 feed 数据与价格不变;此时旧 TypeScript 服务若遇到过期 feed 会失败,所以立即进入下一步。
+3. 对 API 与 keeper 做滚动重启(不同时停服务),部署管理员 CLI 后执行一次只读/模拟验收,确认借款/取款生成 `refresh_timestamp`、keeper 交易没有 feed signer,并验证管理员改价成功、非管理员写入被拒。
+
+现有 tSOL/tUSDC 年龄上限为 240 秒,因此第 2–3 步需在这个新鲜度窗口内完成;若超过窗口,过期前端操作会暂时收到价格不可用,keeper 恢复后自动刷新,无需恢复旧的公开改价权限。该顺序是计划,本地没有执行程序构建、部署、真实钱包拒绝验证或 devnet 联调。
+

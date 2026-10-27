@@ -785,3 +785,33 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **操作按钮掉到第二行**:新表格规则 `.portfolio-table li`(4 列)与后面的通用 `.asset-list li`(3 列)优先级相同且写在前面，被覆盖。选择器改为 `.asset-list.portfolio-table li`。
 - **表头与数据列错位约 35px**:表头和每行是各自的网格，`auto` 列宽算得不同。改为固定列宽，实测各列右边界逐一相等。
 - **浏览器验收**:未连接(4 步引导)、模拟数据未存款(引导停在第 4 步、可借提示先存抵押)、有存款无借款(引导隐藏、标题汇总、按钱包美元值排序)、有借款(bob 在 devnet 借 0.1 pSOL:健康度 79%、清算距离条 21%、借款汇总 APR 8.57% 与已用额度 22%,验收后已全额还款);深色 390 英文退回两行卡片、无溢出。
+
+### T26 修复 mock 价格可被任何人改写(安全)— 进行中(三步上线)
+
+**漏洞**:tSOL/tUSDC/tHYPE 的 mock 价格账户由 mocks 程序的 `write(offset, data)` 写入，只要求目标账户签名;而价格账户密钥由公开字符串派生(`deriveKeypair('feed/<代币>')`),任何人都能算出并改价，进而用虚高抵押借空池子或把别人压到可清算。
+
+**修复(mocks 程序由 Claude 改并部署;本任务只改 TypeScript)**:
+- `write`:账户改为 `[target(可写、签名), authority(签名)]`,`authority` 必须是价格管理员(部署者钱包 `6LzQ…NL9`)。只有管理员能改价。
+- 新增 `refresh_timestamp`:无参数，账户 `[feed(可写，不签名)]`。任何人可调用，只把 `last_update_timestamp`(偏移 2216)设为链上当前时间、三个 slot 字段(偏移 2264+6×16+8 起)设为当前 slot;价格不变。仅接受本程序拥有、PullFeed 判别符、`sample_size>0` 的账户。Anchor 判别符 = `sha256("global:refresh_timestamp")[0..8]`。
+
+**要做(TypeScript,全部离线可测):**
+1. `src/oracle/mock-write.ts`:
+   - `writeIx(program, target, offset, data, authority)`:增加 `authority` 签名账户(第二个)。
+   - `refreshTimestampIx(program, feed)`:改为调用 `refresh_timestamp`,feed 可写不签名;不再需要时间参数(链上取 Clock)。
+   - 删除 `mockFeedSigner`;判断"是否我们的 mock、可代为刷新"改为：价格账户 owner 等于 mocks 程序且是 PullFeed 判别符。
+2. `src/api/builder/index.ts`:借款/取款需要刷新时只加 `refreshTimestampIx`,**不再给交易加任何价格账户签名**(删除部分签名逻辑)。构建器测试同步。
+3. `src/keeper/price.ts` 与 `scripts/price-keeper.ts`:keeper 只调 `refresh_timestamp`(一笔交易批量刷新到期的 feed),不再读价格、不再写价格、不需要 feed 签名;keeper 钱包只付手续费。`src/keeper/keeper.test.ts` 同步(保留"只刷新快到期的 feed"、批量一次、五次失败退出等行为断言)。
+4. `scenario/lib/mock-feed.ts`、`scripts/fix-hype-oracle.ts`:所有 `writeIx` 传 `ctx.admin.publicKey` 作 `authority`(管理员已是交易签名者)。`scripts/verify-pyth-bank.ts` 改用新的 `refreshTimestampIx`。
+5. 文档:`docs/decisions.md` 新增 D-029(漏洞、修法、三步不停机上线);`docs/addresses.md` 的 keeper 一行改为"只刷新时间、无改价权限";EP3/EP8 中描述"密钥公开派生、任何人可刷新"的段落改为新机制(snapshot-docs 片段随代码更新)。
+
+**测试**:`writeIx` 账户顺序与签名标记;`refreshTimestampIx` 判别符、账户、无签名;构建器刷新交易不含价格账户签名;keeper 新行为。
+
+**验收**:与 CI 相同的检查。程序构建、两次升级与线上联调由 Claude 完成。
+
+### T26 审查与上线记录(2026-10-27)
+
+- **程序(Claude)**:`program/mocks-lib.rs` 覆盖上游 mocks 的 `lib.rs`,`build.sh` 复制并替换 `PRICE_ADMIN` 与 `ENFORCE_WRITE_AUTHORITY`(`MOCKS_WRITE_AUTH=open|enforce`,默认 enforce)。管理员放在 `remaining_accounts[0]`,使中间态下旧的单账户调用仍能解析。`pubkey!` 宏需要未直接依赖的 `solana_program`,改为 base58 字符串比较。
+- **第 1 步(已完成)**:链上原程序已 dump 备份;ExtendProgram 每次至少 10240 字节(CLI 自动扩容只申请差额 3296 而失败),手动扩 10240 后部署 open 版。devnet 模拟：旧/新/冒充管理员的 write 均通过(open 预期),`refresh_timestamp` 对 tUSDC 通过、对 bank 账户报 ConstraintOwner。真实刷新一笔：只改 11 字节(2216–2386),价格区逐字节不变。
+- **审查修正**:Codex 的 `mockOracleOwner()` 运行时 `readFileSync('program/devnet.json')`,Vercel 函数不会打包该文件，线上所有需要刷新的借款/取款会 500。改为静态 import(本地 `program/out` 仍优先),并以空目录 CommonJS 加载验证。
+- **第 2 步**:合并本 PR,Vercel 部署后线上构建器改用 `refresh_timestamp`。
+- **第 3 步**:部署 enforce 版，验证旧格式与冒充管理员的 write 被拒、管理员 write 通过，并对正式站点跑端到端借还。

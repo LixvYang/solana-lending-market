@@ -110,7 +110,7 @@ export function deriveKeypair(label: string): Keypair {
 
 1. 构建 marginfi 时,把"预期的 Switchboard 程序地址"换成上游自带的 `mocks` 程序;
 2. 让价格账户归 `mocks` 所有,字节布局与真实账户**逐字节一致**;
-3. 价格通过 `mocks` 的 `write(offset, data)` 指令写入,"crank"就是用链上时间重写一次时间戳。
+3. 价格通过 `mocks` 的 `write(offset, data)` 指令写入;目标账户必须签名,并且第二个签名账户必须是部署者价格管理员 `6LzQ…NL9`。"crank"只更新新鲜度,使用独立的 `refresh_timestamp` 指令和链上 Clock,任何人都能调用,但不能改价格。
 
 价格区域只有 177 字节:
 
@@ -134,6 +134,8 @@ export function resultRegion(price: number | bigint, timestamp: number, slot: nu
 <!-- /snippet -->
 
 **偏移是怎么确认的?** 不是自己想的。从 `switchboard-on-demand` 的 Rust 源码按 `repr(C)` 算出来,再用一个链上**真实**的 Switchboard 账户逐项核对:authority、queue、名字、`min_responses`、`max_staleness` 全部对上。这个真实账户存在 `fixtures/switchboard-pullfeed-uncranked.bin`,有测试盯着它。
+
+`write(offset, data)` 的目标 feed 签名来自其公开派生地址,因此不能充当改价权限。现在每次写入还必须由部署者价格管理员 `6LzQ…NL9` 签名;`refresh_timestamp` 则由链上 Clock 更新新鲜度字段,任何人可调用但不改价格(D-029)。
 
 > 视频里请明确说:这是"布局一致的 mock",不是真实的 Switchboard 价格。真实 Switchboard 那条路只验证到创建 feed。
 

@@ -98,22 +98,18 @@ test('all four lending actions and optional all roundtrip decoder with exact u64
 });
 // 用户撞到的真实问题:价格维护进程连续失败后退出,价格过期,借款/取款报"价格维护进程没有运行"。
 // 这不该让用户感知。构建器现在在价格不够新时,把"刷新时间戳"的指令放进这笔交易里。
-import { TIMESTAMP_OFFSET } from '../../oracle/mock-write';
-import { mockFeedSigner } from '../../oracle/mock-write';
-import { OFFSET } from '../../decoder/switchboard';
 import { createHash } from 'node:crypto';
-const writeDisc = createHash('sha256').update('global:write').digest().subarray(0, 8);
+const refreshDisc = createHash('sha256').update('global:refresh_timestamp').digest().subarray(0, 8);
 const refreshesIn = (tx: VersionedTransaction) => {
   const keys = tx.message.staticAccountKeys;
-  return tx.message.compiledInstructions.filter(ix => Buffer.from(ix.data).subarray(0, 8).equals(writeDisc)).map(ix => ({
-    program: keys[ix.programIdIndex].toBase58(), feed: keys[ix.accountKeyIndexes[0]].toBase58(),
-    offset: Number(Buffer.from(ix.data).readBigUInt64LE(8)), length: Buffer.from(ix.data).readUInt32LE(16), value: Buffer.from(ix.data).subarray(20) }));
+  return tx.message.compiledInstructions.filter(ix => Buffer.from(ix.data).equals(refreshDisc)).map(ix => ({
+    program: keys[ix.programIdIndex].toBase58(), feed: keys[ix.accountKeyIndexes[0]].toBase58() }));
 };
 const signedBy = (tx: VersionedTransaction, key: string) => {
   const index = tx.message.staticAccountKeys.findIndex(k => k.toBase58() === key);
   return index >= 0 && index < tx.message.header.numRequiredSignatures && tx.signatures[index].some(b => b !== 0);
 };
-test('价格过旧或在未来时,自动在交易里刷新时间戳:只写 8 字节、价格数值不动、价格账户由服务端代签、用户无感', async () => {
+test('价格过旧或在未来时,自动加入公开 refresh_timestamp:feed 不签名且交易不携带价格账户私钥', async () => {
   const db = await seedApi(); try {
     await preBorrow(db);
     for (const timestamp of [1699999000, 1700000001, 1699999879]) { // 过旧 1000 秒 / 在未来 / 121 秒前
@@ -122,10 +118,9 @@ test('价格过旧或在未来时,自动在交易里刷新时间戳:只写 8 字
       assert.ok(writes.length >= 1, `timestamp ${timestamp} 应该触发刷新`);
       for (const w of writes) {
         assert.equal(w.program, mockOwner.toBase58());
-        assert.equal(w.offset, TIMESTAMP_OFFSET); assert.equal(w.length, 8); assert.equal(w.value.length, 8); // 只动时间戳
-        assert.equal(w.value.readBigInt64LE(0), 1_700_000_000n);                                            // 刷新到"现在"
-        assert.ok(w.offset + 8 <= OFFSET.result, '没有碰到结果值(价格)所在的区域');
-        assert.ok(signedBy(tx, w.feed), '价格账户的签名由服务端补上');
+        const index = tx.message.staticAccountKeys.findIndex(k => k.toBase58() === w.feed);
+        assert.ok(index >= tx.message.header.numRequiredSignatures, '公开刷新无需 feed 签名');
+        assert.ok(!signedBy(tx, w.feed), '交易没有价格账户签名');
       }
       assert.equal(decodedInstructions(tx)[0].name, 'lending_account_borrow'); // 业务指令仍在
       assert.ok(tx.serialize().length <= 1232);
@@ -152,11 +147,12 @@ test('不能刷新的才报 PriceStale(且文案不提内部细节):没有价格
     // 从未有过价格(sample_size 为 0)
     const never = feedInfo(1700000000); never.data[2215] = 0;
     await assert.rejects(buildTransaction(db, services({ getAccountInfo: async () => never }), borrow), PriceStale);
-    // 不是我们的 mock(密钥不是公开派生的)就不能代为刷新
-    assert.equal(mockFeedSigner(Keypair.generate().publicKey), null);
-    assert.ok(mockFeedSigner(new PublicKey(a.feeds.tSOL)));
-    assert.ok(mockFeedSigner(new PublicKey(a.feeds.tUSDC)));
-    assert.ok(mockFeedSigner(deriveKeypair('feed/tHYPE').publicKey));
+    // 即使 owner 被允许，非 PullFeed discriminator 也不能走 mock 刷新。
+    const malformed = feedInfo(1700000000); malformed.data[0] ^= 1;
+    await assert.rejects(buildTransaction(db, services({ getAccountInfo: async () => malformed }), borrow), PriceStale);
+    const switchboard = 'Aio4gaXjXzJNVLtzwtNVmSqGKpANtXhybbkhtAC94ji2';
+    const external = { ...services({ getAccountInfo: async () => ({ ...feedInfo(), owner: new PublicKey(switchboard) }) }), oracleOwners: new Set([switchboard]) };
+    await assert.rejects(buildTransaction(db, external, borrow), PriceStale);
   } finally { await db.close(); }
 });
 test('simulation failure still returns transaction; custom IDL translations, unknown, sanitized logs', async () => {

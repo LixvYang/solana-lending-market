@@ -72,7 +72,7 @@ async function writePrice(ctx: Context, token: Token, price: number, extra: Tran
   const program = mocksProgram();
   const feed = feedKeypair(token).publicKey;
   const { slot, timestamp } = await chainTime(ctx);
-  const ix = writeIx(program, feed, OFFSET.sampleSize, resultRegion(price, timestamp, slot));
+  const ix = writeIx(program, feed, OFFSET.sampleSize, resultRegion(price, timestamp, slot), ctx.admin.publicKey);
   await send(ctx, `write mock feed ${token} = $${price}`, [...extra, ix], [feedKeypair(token)]);
 }
 
@@ -97,10 +97,10 @@ export async function createOrUpdateFeed(ctx: Context, token: Token, price: numb
   await writePrice(ctx, token, price, [
     SystemProgram.createAccount({ fromPubkey: ctx.admin.publicKey, newAccountPubkey: keypair.publicKey,
       lamports: rent, space: FEED_SIZE, programId: program }),
-    writeIx(program, keypair.publicKey, 0, DISCRIMINATOR),
-    writeIx(program, keypair.publicKey, OFFSET.authority, owners),
-    writeIx(program, keypair.publicKey, OFFSET.name, name),
-    writeIx(program, keypair.publicKey, OFFSET.maxStaleness, staleness),
+    writeIx(program, keypair.publicKey, 0, DISCRIMINATOR, ctx.admin.publicKey),
+    writeIx(program, keypair.publicKey, OFFSET.authority, owners, ctx.admin.publicKey),
+    writeIx(program, keypair.publicKey, OFFSET.name, name, ctx.admin.publicKey),
+    writeIx(program, keypair.publicKey, OFFSET.maxStaleness, staleness, ctx.admin.publicKey),
   ]);
 }
 // #endregion

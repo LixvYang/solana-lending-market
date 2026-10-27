@@ -255,6 +255,28 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .portfolio-kpis { margin-bottom: 0; }
 .portfolio-kpis .hero { overflow-wrap: anywhere; }
 .portfolio-kpis .meter { margin-top: 8px; }
+.liquidation-meter { position: relative; overflow: visible; }
+.liquidation-meter > i { background: var(--good); }
+.liquidation-meter.warn > i { background: var(--warning); }
+.liquidation-meter.crit > i { background: var(--critical); }
+.liquidation-meter::after { position: absolute; top: -2px; right: 0; width: 2px; height: 12px; background: var(--ink-2); content: ''; }
+.portfolio-card-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px; }
+.portfolio-card-heading h2 { margin: 0; }
+.portfolio-totals { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2); font-size: 12px; }
+.portfolio-totals b { color: var(--ink); font-size: 14px; font-weight: 500; }
+.portfolio-totals .apr-supply b { color: var(--supply); }
+.portfolio-totals .apr-borrow b { color: var(--borrow); }
+/* 选择器带上 .asset-list:后面通用的 .asset-list li(3 列)优先级相同、写在后面，会把这里的 4 列覆盖掉。 */
+.portfolio-table-head, .asset-list.portfolio-table li { display: grid; grid-template-columns: minmax(0, 1fr) 112px 72px 64px; /* 固定宽度：表头和每行是各自的网格，auto 会算出不同列宽导致错位 */ align-items: center; gap: 12px; }
+.portfolio-table-head { padding: 6px 0; color: var(--ink-2); font-size: 12px; }
+.portfolio-table-head > :not(:first-child) { text-align: right; }
+.asset-list.portfolio-table li { padding: 9px 0; }
+.portfolio-table .portfolio-asset { min-width: 0; }
+.portfolio-table .portfolio-apr { text-align: right; font-variant-numeric: tabular-nums; }
+.portfolio-mobile-sub { display: none; }
+.asset-list.portfolio-table li.zero { color: var(--ink-2); }
+.asset-list.portfolio-table li.zero .portfolio-cell, .asset-list.portfolio-table li.zero .portfolio-cell .portfolio-mobile-sub { color: var(--ink-2); }
+.asset-list.portfolio-table li.zero .portfolio-cell b { color: var(--ink-2); }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .section-heading h2 { margin-bottom: 2px; }
 .section-heading p { margin: 0; }
@@ -290,6 +312,13 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
   .portfolio-lists { grid-template-columns: minmax(0, 1fr); }
   .wallet-hint { align-items: flex-start; }
   .onboarding-steps { gap: 10px 14px; }
+  .portfolio-card-heading { align-items: flex-start; flex-direction: column; }
+  .portfolio-table-head, .portfolio-table .portfolio-apr { display: none; }
+  .asset-list.portfolio-table li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'asset amount' 'asset action'; gap: 3px 10px; }
+  .portfolio-table .portfolio-asset { grid-area: asset; }
+  .portfolio-table .n { grid-area: amount; }
+  .portfolio-table .portfolio-mobile-sub { display: block; }
+  .asset-list.portfolio-table li > .btn { grid-area: action; justify-self: end; }
 }
 
 /* 市场资产详情 */

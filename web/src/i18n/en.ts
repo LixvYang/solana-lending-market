@@ -40,6 +40,7 @@ export const en: { [K in keyof typeof zh]: Widen<typeof zh[K]> } = {
   gettingStarted: 'Get started', stepDone: 'Complete', stepNotDone: 'Incomplete',
   connectDevnetWallet: 'Connect a devnet wallet', claimDevnetSol: 'Get devnet SOL', getTestTokens: 'Get test tokens', faucetQuota: (n) => `${n} ${n === 1 ? 'claim' : 'claims'} left in this period`, supplyCollateral: 'Supply collateral', borrowAssets: 'Borrow assets', goSupply: 'Go to supply →', goBorrow: 'Go to borrow →',
   walletSol: 'Wallet SOL', solInsufficient: 'Low SOL balance. Get SOL from the faucet ↗', swapSol: 'Swap SOL', yourSupplies: 'Your supplies', yourBorrows: 'Your borrows', noSupplies: 'No supplies yet', noBorrows: 'No borrows yet',
+  summaryBalance: 'Balance', summaryApr: 'APR', summaryCapacity: 'Capacity used', positionDeposit: 'Supply', positionDebt: 'Debt',
   supplyAssets: 'Assets to supply', borrowAssetsTitle: 'Assets to borrow', walletBalance: 'Wallet balance', supplyButton: 'Supply', borrowButton: 'Borrow', supplyCollateralFirst: 'Supply collateral to borrow',
   historyRecords: 'History', retryLater: 'Failed to load. Try again later.', noRecords: 'No records yet',
   walletChange: 'Change wallet', connecting: 'Connecting…', copyAddress: 'Copy address', copied: 'Copied', disconnect: 'Disconnect',

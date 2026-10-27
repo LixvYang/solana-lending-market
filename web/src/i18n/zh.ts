@@ -38,6 +38,7 @@ export const zh = {
   gettingStarted: '开始使用', stepDone: '已完成', stepNotDone: '未完成',
   connectDevnetWallet: '连接 devnet 钱包', claimDevnetSol: '领取 devnet SOL', getTestTokens: '领取测试币', faucetQuota: (n: number) => `本时段剩余 ${n} 份`, supplyCollateral: '存入抵押资产', borrowAssets: '借出资产', goSupply: '去存入资产 →', goBorrow: '去借出资产 →',
   walletSol: '钱包 SOL', solInsufficient: 'SOL 不足，去水龙头领取 ↗', swapSol: '用 SOL 兑换', yourSupplies: '我的存款', yourBorrows: '我的借款', noSupplies: '还没有存款', noBorrows: '还没有借款',
+  summaryBalance: '余额', summaryApr: 'APR', summaryCapacity: '已用额度', positionDeposit: '存款', positionDebt: '债务',
   supplyAssets: '可存资产', borrowAssetsTitle: '可借资产', walletBalance: '钱包余额', supplyButton: '存入', borrowButton: '借出', supplyCollateralFirst: '存入抵押后可借款',
   historyRecords: '历史记录', retryLater: '读取失败，稍后重试', noRecords: '还没有记录',
   walletChange: '更换钱包', connecting: '连接中…', copyAddress: '复制地址', copied: '已复制', disconnect: '断开连接',

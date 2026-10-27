@@ -426,3 +426,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme='light'])) { --supply: var(--green-11); --borrow: var(--amber-11); --borrow-line: color-mix(in srgb, var(--amber-9) 50%, var(--amber-7)); }
 }
+
+.wallet-cell a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.wallet-cell a:hover { color: var(--s1); text-decoration: underline; }
+.wallet-cell .muted { font-size: 12px; }

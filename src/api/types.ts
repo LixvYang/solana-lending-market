@@ -142,6 +142,9 @@ export interface ActivityItem {
   event: string | null;
   account: string | null;
   account_label: string | null;
+  /** 拥有 account 的 Solana 钱包(事件头 marginfi_account_authority);无事件时为 null。 */
+  authority: string | null;
+  authority_label: string | null;
   /** 清算取被清算资产所在的 bank(asset_bank)。 */
   bank: string | null;
   bank_label: string | null;

@@ -23,7 +23,9 @@ test('18 top-level rows agree with independent steps/events; pages have no gaps 
     assert.equal(item.account,d.header.marginfiAccount??null);assert.equal(item.bank,d.bank??d.assetBank??null); // 清算事件没有 bank，取 assetBankassert.equal(item.amount,typeof d.amount==='string'?d.amount:null);
    }
   }
-  const borrow=all.items.find(i=>i.instruction==='lending_account_borrow')!;assert.equal(borrow.event,'LendingAccountBorrowEvent');assert.equal(borrow.amount,'5000000000');assert.equal(borrow.account_label,'bob');
+  const borrow=all.items.find(i=>i.instruction==='lending_account_borrow')!;assert.equal(borrow.event,'LendingAccountBorrowEvent');assert.equal(borrow.amount,'5000000000');
+  // 钱包取自事件头;bob 的钱包在 labels 里叫 bob。
+  assert.equal(borrow.authority,run.addresses.actors.bob);assert.equal(borrow.authority_label,'bob');assert.equal(borrow.account_label,'bob');
   const raw=structuredClone((txs.transactions as Record<string,unknown>)[borrow.signature]) as RawTransaction;
   raw.transaction.signatures=['Z'+borrow.signature.slice(1)];raw.meta!.err={InstructionError:[borrow.ix_index,'failed']};await insertRawTx(db,raw);await decodePending(db,marginfiIdl);
   // 同 slot 下增加另一个顶层位置；相同 slot/ix 下的另一个签名由稳定第三键区分。

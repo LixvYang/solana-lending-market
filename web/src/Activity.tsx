@@ -6,6 +6,7 @@ import { ixLabel } from './instructions';
 import { TokenIcon } from './tokens';
 import { useT } from './i18n';
 import { relativeTime } from './explorer';
+import { WalletCell } from './WalletCell';
 
 type ActivityKind = 'all' | 'supply' | 'borrow' | 'liquidate';
 
@@ -43,12 +44,12 @@ export function Activity({ first, next, pool, onOpen }: { first: ActivityItem[];
       <div className="seg activity-filters" role="group" aria-label={t.explorerActivity}>{filters.map(([value, label]) =>
         <button key={value} type="button" className={kind === value ? 'on' : ''} aria-pressed={kind === value} onClick={() => changeKind(value)}>{label}</button>)}</div>
       <div className="tablewrap"><table className="activity activity-compact-table">
-        <thead><tr><th>{t.time}</th><th>{t.operation}</th><th>{t.account}</th><th>{t.token}</th><th className="n">{t.amount}</th><th /></tr></thead>
+        <thead><tr><th>{t.time}</th><th>{t.operation}</th><th>{t.wallet}</th><th>{t.token}</th><th className="n">{t.amount}</th><th /></tr></thead>
         <tbody>{rows.map((i) => { const ix = ixLabel(i.instruction, t), usd = estimatedUsd(i, pool, decimals); return (
           <tr key={`${i.signature}:${i.ix_index}`} className="pick" tabIndex={0} onClick={() => onOpen(i.signature)} onKeyDown={(e) => e.key === 'Enter' && onOpen(i.signature)}>
             <td className="muted" title={i.block_time ? fmtTime(i.block_time, locale) : undefined}>{relativeTime(i.block_time, Date.now(), locale, t)}</td>
             <td><span className={`ix ${ix.kind}`}>{ix.label}</span>{!i.ok && <span className="chip failed-result">{t.failed}</span>}</td>
-            <td>{i.account_label ? <><b>{i.account_label}</b><div className="muted mono">{short(i.account)}</div></> : <span className="mono">{short(i.account)}</span>}</td>
+            <td><WalletCell wallet={i.authority} account={i.account} name={i.authority_label ?? i.account_label} /></td>
             <td>{i.bank_label ? <span className="amt"><TokenIcon symbol={i.bank_label} size={18} />{i.bank_label}</span> : <span className="muted">{i.bank ? short(i.bank) : '—'}</span>}</td>
             <td className="n">{i.amount != null && i.bank ? <span className="activity-amount"><span>{fmtToken(i.amount, decimals[i.bank] ?? 0)}</span>{usd !== null && <span className="muted">≈ {fmtUsd(usd)}</span>}</span> : <span className="muted">—</span>}</td>
             <td className="go" aria-hidden>{t.breakdown}</td>

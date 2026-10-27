@@ -32,7 +32,7 @@ export const zh = {
   showDetails: '展开兑换明细', hideDetails: '收起兑换明细', swapDesk: '成交方式', oracleExecution: '兑换台按预言机价格成交', deskAvailable: '兑换台可用数量',
   actionDeposit: '存款', actionBorrow: '借款', actionRepay: '还款', actionWithdraw: '取款',
   buildSimulate: '构建并模拟交易…', simulationFailed: (message: string) => `模拟失败：${message}`, unknownError: '未知错误', walletCannotSign: '当前钱包不支持交易签名',
-  actionAmount: (action: string) => `${action}数量`, wallet: '钱包', supplied: '已存', debt: '债务', all: '全部', borrowMax: '最多可借',
+  actionAmount: (action: string) => `${action}数量`, wallet: '钱包', marginfiAccount: 'marginfi 账户', supplied: '已存', debt: '债务', all: '全部', borrowMax: '最多可借',
   borrowAprText: (value: string) => `借款 APR ${value}`, supplyAprText: (value: string) => `存款 APR ${value}`,
   depositOffsetsDebt: (symbol: string) => `你在 ${symbol} 里有存款。借款会先扣除同资产存款;想借出其他资产，请用 ${symbol} 做抵押。`,
   invalidPrecision: (n: number) => `数量格式不对,或小数位超过 ${n} 位。`, riskPreview: '交易后风险预估', referenceLiquidationPrice: '参考清算价',

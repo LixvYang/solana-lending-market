@@ -4,6 +4,7 @@ import { fmtToken, fmtUsd, short } from './format';
 import { TokenIcon } from './tokens';
 import { riskMetrics } from './risk';
 import { explorerAccounts, explorerSummary } from './explorer';
+import { WalletCell } from './WalletCell';
 import { useT } from './i18n';
 
 type RiskStatus = 'no_debt' | 'healthy' | 'risk' | 'danger' | 'liquidatable' | 'unknown';
@@ -42,7 +43,7 @@ export function ExplorerOverview({ accounts, pool }: { accounts: AccountView[]; 
       <div className="card"><div className="label">{t.accountsWithPosition}</div><div className="stat">{summary.positions}</div></div>
       <div className="card"><div className="label">{t.debtAccounts}</div><div className="stat">{summary.debtAccounts}</div></div>
       <div className="card"><div className="label">{t.totalDebt}</div><div className="stat">{fmtUsd(summary.debtUsd)}</div></div>
-      <div className="card"><div className="label">{t.lowestHealth}</div><div className="stat">{summary.lowest ? `${summary.lowest.health.toFixed(1)}%` : '—'}</div>{summary.lowest && <div className="muted">{named(summary.lowest.account) ? summary.lowest.account.label : short(summary.lowest.account.address)}</div>}</div>
+      <div className="card"><div className="label">{t.lowestHealth}</div><div className="stat">{summary.lowest ? `${summary.lowest.health.toFixed(1)}%` : '—'}</div>{summary.lowest && <div className="muted">{named(summary.lowest.account) ? summary.lowest.account.label : short(summary.lowest.account.authority)}</div>}</div>
     </div>;
 }
 
@@ -62,7 +63,7 @@ export function Accounts({ accounts, pool }: { accounts: AccountView[]; pool: Po
     const tone = status === 'liquidatable' || status === 'danger' ? 'crit' : status === 'risk' ? 'warn' : status === 'healthy' ? 'good' : '';
     const fill = healthPercent == null ? 0 : Math.max(0, Math.min(100, 100 - healthPercent));
     return <tr key={a.address}>
-      <td>{named(a) ? <><b>{a.label}</b><div className="muted mono">{short(a.address)}</div></> : <span className="mono">{short(a.address)}</span>}</td>
+      <td><WalletCell wallet={a.authority} account={a.address} name={named(a) ? a.label : null} /></td>
       <td>{list(a.balances.filter((b) => b.deposit !== '0').map((b) => ({ bank: b.bank, label: b.label, amount: b.deposit })))}</td>
       <td>{list(a.balances.filter((b) => b.borrow !== '0').map((b) => ({ bank: b.bank, label: b.label, amount: b.borrow })))}</td>
       <td className={`n health-cell ${tone}`}>{healthPercent == null ? '—' : `${healthPercent.toFixed(1)}%`}<div className={`meter health-meter ${tone}`} role="img" aria-label={healthPercent == null ? t.missingPrice : `${t.healthFactor} ${healthPercent.toFixed(1)}%`}><i style={{ width: `${fill}%` }} /></div></td>
@@ -74,7 +75,7 @@ export function Accounts({ accounts, pool }: { accounts: AccountView[]; pool: Po
     <div className="card">
       <h2>{t.liquidationMonitor}</h2>
       <div className="tablewrap"><table>
-        <thead><tr><th>{t.account}</th><th>{t.deposits}</th><th>{t.borrows}</th><th className="n">{t.healthFactor}</th><th className="n">{t.availableBorrow}</th><th>{t.status}</th></tr></thead>
+        <thead><tr><th>{t.wallet}</th><th>{t.deposits}</th><th>{t.borrows}</th><th className="n">{t.healthFactor}</th><th className="n">{t.availableBorrow}</th><th>{t.status}</th></tr></thead>
         <tbody>{active.map(row)}{showEmpty && empty.map(row)}{empty.length > 0 && <tr><td className="empty-accounts" colSpan={6}><button className="linkish muted" type="button" aria-expanded={showEmpty} onClick={() => setShowEmpty(value => !value)}>{t.emptyAccounts(empty.length)}</button></td></tr>}</tbody>
       </table></div>
     </div>

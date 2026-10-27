@@ -63,7 +63,7 @@ export function installMock() {
     const who = ['alice', 'bob', 'carol'].find((p) => s.label.includes(p)) ?? null;
     const amt = /(\d[\d,]*) (tUSDC|tSOL)/.exec(s.label);
     return { signature: s.signatures[0], slot: String(s.slot), block_time: new Date(1791733900000 + Number(s.slot) % 1000 * 400).toISOString(), ix_index: 1,
-      instruction: nameOf(s.label)!, event: null, account: who ? (a.marginfiAccounts as Record<string, string>)[who] : null, account_label: who, bank: tok ? (a.banks as Record<string, string>)[tok] : null,
+      instruction: nameOf(s.label)!, event: null, account: who ? (a.marginfiAccounts as Record<string, string>)[who] : null, account_label: who, authority: who ? (a.actors as Record<string, string>)[who] ?? null : null, authority_label: who, bank: tok ? (a.banks as Record<string, string>)[tok] : null,
       bank_label: tok, amount: amt ? String(BigInt(amt[1].replace(/,/g, '')) * 10n ** BigInt(amt[2] === 'tSOL' ? 9 : 6)) : null, ok: true };
   });
   const liquidationStep = run.steps.find((s) => s.label.includes('liquidate'))!;
@@ -181,7 +181,7 @@ export function installMock() {
       const bank = banks.find((item) => item.address === submitted?.bank);
       const action = submitted?.action ?? 'deposit';
       pendingItem = { signature, slot: '1', block_time: new Date().toISOString(), ix_index: 0, instruction: `lending_account_${action}`,
-        event: null, account: a.marginfiAccounts.bob, account_label: 'bob', bank: bank?.address ?? null, bank_label: bank?.label ?? null, amount: submitted?.amount ?? null, ok: true };
+        event: null, account: a.marginfiAccounts.bob, account_label: 'bob', authority: a.actors.bob, authority_label: 'bob', bank: bank?.address ?? null, bank_label: bank?.label ?? null, amount: submitted?.amount ?? null, ok: true };
       return ok({ signature, status: 'confirmed', error: null, slot: '1', indexed: true });
     }
     const sig = url.pathname.split('/').pop()!;

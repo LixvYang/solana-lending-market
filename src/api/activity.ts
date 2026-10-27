@@ -61,15 +61,18 @@ export async function getActivity(db: Db, options: {
     const data = event?.data as {
       header?: {
         marginfi_account?: string;
+        /** 拥有该 marginfi 账户的 Solana 钱包;事件头里自带，不用再查账户状态。 */
+        marginfi_account_authority?: string;
       };
       bank?: string;
       /** 清算事件没有 bank 字段，被清算的资产所在的 bank 叫 asset_bank。 */
       asset_bank?: string;
       amount?: string;
     } | undefined;
-    const account = data?.header?.marginfi_account ?? null, itemBank = options.bank ?? data?.bank ?? data?.asset_bank ?? null;
+    const account = data?.header?.marginfi_account ?? null, authority = data?.header?.marginfi_account_authority ?? null, itemBank = options.bank ?? data?.bank ?? data?.asset_bank ?? null;
     return { signature: String(row.signature), slot: String(row.slot), block_time: iso(row.block_time), ix_index: Number(row.ix_index),
       instruction: String(row.name), event: event ? String(event.name) : null, account, account_label: account ? labels[account] ?? null : null,
+      authority, authority_label: authority ? labels[authority] ?? null : null,
       bank: itemBank, bank_label: itemBank ? labels[itemBank] ?? null : null, amount: typeof data?.amount === 'string' ? data.amount : null, ok: row.err == null };
   });
   const last = items.at(-1);

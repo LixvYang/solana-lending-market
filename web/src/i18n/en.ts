@@ -34,7 +34,7 @@ export const en: { [K in keyof typeof zh]: Widen<typeof zh[K]> } = {
   showDetails: 'Show swap details', hideDetails: 'Hide swap details', swapDesk: 'Execution', oracleExecution: 'The swap desk uses oracle prices', deskAvailable: 'Swap desk available',
   actionDeposit: 'Supply', actionBorrow: 'Borrow', actionRepay: 'Repay', actionWithdraw: 'Withdraw',
   buildSimulate: 'Building and simulating transaction…', simulationFailed: (message) => `Simulation failed: ${message}`, unknownError: 'Unknown error', walletCannotSign: 'This wallet does not support transaction signing',
-  actionAmount: (_action) => 'Amount', wallet: 'Wallet', supplied: 'Supplied', debt: 'Debt', all: 'All', borrowMax: 'Available to borrow',
+  actionAmount: (_action) => 'Amount', wallet: 'Wallet', marginfiAccount: 'marginfi account', supplied: 'Supplied', debt: 'Debt', all: 'All', borrowMax: 'Available to borrow',
   borrowAprText: (value) => `Borrow APR ${value}`, supplyAprText: (value) => `Supply APR ${value}`,
   depositOffsetsDebt: (symbol) => `You have supplied ${symbol}. Borrowing first uses that supply. To borrow another asset, use ${symbol} as collateral.`,
   invalidPrecision: (n) => `Invalid amount or more than ${n} decimal places.`, riskPreview: 'Estimated risk after transaction', referenceLiquidationPrice: 'Reference liquidation price',

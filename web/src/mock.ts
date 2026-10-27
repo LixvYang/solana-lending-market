@@ -82,13 +82,13 @@ export function installMock() {
     { time: new Date(Date.now() - 7200000).toISOString(), kind: 'deposit', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }], result: 'success', signature: run.steps.find((s) => s.label.includes('bob') && s.label.includes('deposit'))?.signatures[0] ?? mockSignature, detail: true },
   ];
   const swapAssets = [
-    { symbol: 'SOL', decimals: 9, usd: '150', source: 'pyth' },
-    { symbol: 'tSOL', decimals: 9, usd: '100', source: 'mock' },
-    { symbol: 'tUSDC', decimals: 6, usd: '1', source: 'mock' },
-    { symbol: 'pSOL', decimals: 9, usd: '108', source: 'pyth' },
-    { symbol: 'pBTC', decimals: 8, usd: '84400', source: 'pyth' },
-    { symbol: 'pETH', decimals: 8, usd: '2500', source: 'pyth' },
-    { symbol: 'tHYPE', decimals: 8, usd: '80', source: 'mock' },
+    { symbol: 'SOL', mint: null, decimals: 9, usd: '150', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'tSOL', mint: a.mints.tSOL, decimals: 9, usd: '100', source: 'mock', desk_available: '100000000000' },
+    { symbol: 'tUSDC', mint: a.mints.tUSDC, decimals: 6, usd: '1', source: 'mock', desk_available: '100000000000' },
+    { symbol: 'pSOL', mint: devnet.labels.mints.pSOL, decimals: 9, usd: '108', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'pBTC', mint: devnet.labels.mints.pBTC, decimals: 8, usd: '84400', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'pETH', mint: devnet.labels.mints.pETH, decimals: 8, usd: '2500', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'tHYPE', mint: devnet.labels.mints.tHYPE, decimals: 8, usd: '80', source: 'mock', desk_available: '100000000000' },
   ] as const;
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
@@ -155,7 +155,8 @@ export function installMock() {
     if (url.pathname.startsWith('/api/wallet/')) {
       return ok({ wallet: url.pathname.split('/').pop(), sol_lamports: '2500000000', marginfi_account: null, faucet_url: 'http://localhost:8788',
         tokens: banks.map((b) => ({ bank: b.address, mint: b.mint, label: b.label, decimals: b.decimals,
-          amount: ({ tUSDC: '1000000000', tSOL: '10000000000', pSOL: '10000000000', pBTC: '600000', pETH: '20000000', tHYPE: '600000000' } as Record<string, string>)[b.label] ?? '0' })) });
+          amount: ({ tUSDC: '1000000000', tSOL: '10000000000', pSOL: '10000000000', pBTC: '600000', pETH: '20000000', tHYPE: '600000000' } as Record<string, string>)[b.label] ?? '0',
+          has_account: b.label !== 'tHYPE' })) });
     }
     if (url.pathname === '/api/build') {
       // 假交易：一笔 0 lamports 的自转账，只为让钱包有东西可签。

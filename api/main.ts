@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { waitUntil } from '@vercel/functions';
 import { Pool } from 'pg';
 import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import deployment from '../program/devnet.json';
 import { pgDb, poolMax } from '../src/store/db';
 import { assertMigrated } from '../src/store/migrate';
@@ -37,9 +38,10 @@ async function createDesk() {
   const tokens = banks.filter(bank => ['tSOL', 'tUSDC', 'tHYPE', 'pSOL', 'pBTC', 'pETH'].includes(bank.label) && bank.oracle_feed);
   const assets: SwapAssetConfig[] = [{ symbol: 'SOL', decimals: 9 },
     ...tokens.map(bank => ({ symbol: bank.label as SwapAssetConfig['symbol'], decimals: bank.decimals, mint: new PublicKey(bank.mint) }))];
+  const deskAccounts = Object.fromEntries(assets.map(asset => [asset.symbol, asset.mint ? getAssociatedTokenAddressSync(asset.mint, payer.publicKey) : payer.publicKey]));
   const oracles = { SOL: pythPushAccount(FEED_IDS['SOL/USD']), ...Object.fromEntries(tokens.map(bank => [bank.label, new PublicKey(bank.oracle_feed!)])) };
   const usd = (name: string, fallback: string) => nativeAmount(process.env[name] ?? fallback, 6);
-  const swap = createSwap(payer, walletRpc, { assets, price: oraclePrices(walletRpc, oracles),
+  const swap = createSwap(payer, walletRpc, { assets, deskAccounts, price: oraclePrices(walletRpc, oracles, undefined, Object.values(deskAccounts)),
     minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') }, undefined,
     (signature, wallet, from, to) => insertDeskEvent(db, { signature, wallet, kind: 'swap', from, to, status: 'confirmed' }));
   const grant = createFaucet(payer, walletRpc, grants, windowHours(process.env.FAUCET_WINDOW_HOURS), windowMax(process.env.FAUCET_WINDOW_MAX), minimumSol(process.env.FAUCET_MIN_SOL), undefined,

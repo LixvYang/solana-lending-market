@@ -19,7 +19,7 @@ export function TokenPicker({ value, options, onChange, label }: { value: string
   return (
     <div className="picker" ref={box}>
       <button type="button" className="picker-btn" onClick={() => setOpen(!open)} aria-haspopup="listbox" aria-expanded={open} aria-label={label}>
-        <TokenIcon symbol={value} size={24} /><b>{value}</b><span className="chev" aria-hidden>▾</span>
+        <TokenIcon symbol={value} size={24} /><b>{value}</b><svg className="chev" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="m2 4 4 4 4-4" /></svg>
       </button>
       {open && (
         <ul className="picker-list" role="listbox" aria-label={label}>

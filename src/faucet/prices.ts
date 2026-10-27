@@ -28,8 +28,9 @@ export function usdMicroOf(data: Uint8Array, owner: string, nowSeconds: bigint, 
 }
 
 const RATES_CACHE_MS = 15_000;
-export function oraclePrices(rpc: WalletRpc, accounts: Partial<Record<string, PublicKey>>, now = () => Date.now()): PriceReader {
-  const keys = Object.values(accounts).filter((key): key is PublicKey => Boolean(key));
+export function oraclePrices(rpc: WalletRpc, accounts: Partial<Record<string, PublicKey>>, now = () => Date.now(), additional: PublicKey[] = []): PriceReader {
+  const keys = [...Object.values(accounts).filter((key): key is PublicKey => Boolean(key)), ...additional]
+    .filter((key, i, all) => all.findIndex(candidate => candidate.equals(key)) === i);
   let cached: { until: number; infos: Awaited<ReturnType<WalletRpc['getMultipleAccountsInfo']>> } | null = null;
   let pending: Promise<Awaited<ReturnType<WalletRpc['getMultipleAccountsInfo']>>> | null = null;
   const readAll = async () => {
@@ -58,6 +59,10 @@ export function oraclePrices(rpc: WalletRpc, accounts: Partial<Record<string, Pu
     const account = accounts[asset.symbol];
     if (!account) throw new ApiError(503, `${asset.symbol} 没有价格来源`, 'NO_PRICE_SOURCE', { symbol: asset.symbol });
     return decode(asset, await rpc.getAccountInfo(account, 'confirmed'));
+  };
+  read.accounts = async requested => {
+    const infos = await readAll();
+    return requested.map(key => infos[keys.findIndex(candidate => candidate.equals(key))] ?? null);
   };
   return read;
 }

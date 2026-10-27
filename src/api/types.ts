@@ -304,6 +304,8 @@ export interface WalletTokenView {
   decimals: number;
   /** 钱包里的数量，原生单位。 */
   amount: string;
+  /** ATA 是否存在;余额为 0 不代表账户不存在。 */
+  has_account: boolean;
 }
 
 export interface WalletView {
@@ -334,12 +336,15 @@ export type SwapAsset = 'SOL' | 'tSOL' | 'tUSDC' | 'pSOL' | 'pBTC' | 'pETH' | 't
 
 export interface SwapAssetView {
   symbol: SwapAsset;
+  mint: string | null;
   decimals: number;
   /** 单价(USD),十进制字符串;报价当时从价格账户读取。价格暂不可用(如 Pyth 断更)时为 null。 */
   usd: string | null;
   source: OracleSource | null;
   /** usd 为 null 时的原因;其他资产照常报价。 */
   unavailable?: string;
+  /** 兑换台可用数量(原生单位);SOL 已扣除保留余额。 */
+  desk_available: string | null;
 }
 
 export interface SwapRatesView {

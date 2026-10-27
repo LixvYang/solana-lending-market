@@ -786,7 +786,7 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **表头与数据列错位约 35px**:表头和每行是各自的网格，`auto` 列宽算得不同。改为固定列宽，实测各列右边界逐一相等。
 - **浏览器验收**:未连接(4 步引导)、模拟数据未存款(引导停在第 4 步、可借提示先存抵押)、有存款无借款(引导隐藏、标题汇总、按钱包美元值排序)、有借款(bob 在 devnet 借 0.1 pSOL:健康度 79%、清算距离条 21%、借款汇总 APR 8.57% 与已用额度 22%,验收后已全额还款);深色 390 英文退回两行卡片、无溢出。
 
-### T26 修复 mock 价格可被任何人改写(安全)— todo
+### T26 修复 mock 价格可被任何人改写(安全)— 进行中(三步上线)
 
 **漏洞**:tSOL/tUSDC/tHYPE 的 mock 价格账户由 mocks 程序的 `write(offset, data)` 写入，只要求目标账户签名;而价格账户密钥由公开字符串派生(`deriveKeypair('feed/<代币>')`),任何人都能算出并改价，进而用虚高抵押借空池子或把别人压到可清算。
 
@@ -807,3 +807,11 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 **测试**:`writeIx` 账户顺序与签名标记;`refreshTimestampIx` 判别符、账户、无签名;构建器刷新交易不含价格账户签名;keeper 新行为。
 
 **验收**:与 CI 相同的检查。程序构建、两次升级与线上联调由 Claude 完成。
+
+### T26 审查与上线记录(2026-10-27)
+
+- **程序(Claude)**:`program/mocks-lib.rs` 覆盖上游 mocks 的 `lib.rs`,`build.sh` 复制并替换 `PRICE_ADMIN` 与 `ENFORCE_WRITE_AUTHORITY`(`MOCKS_WRITE_AUTH=open|enforce`,默认 enforce)。管理员放在 `remaining_accounts[0]`,使中间态下旧的单账户调用仍能解析。`pubkey!` 宏需要未直接依赖的 `solana_program`,改为 base58 字符串比较。
+- **第 1 步(已完成)**:链上原程序已 dump 备份;ExtendProgram 每次至少 10240 字节(CLI 自动扩容只申请差额 3296 而失败),手动扩 10240 后部署 open 版。devnet 模拟：旧/新/冒充管理员的 write 均通过(open 预期),`refresh_timestamp` 对 tUSDC 通过、对 bank 账户报 ConstraintOwner。真实刷新一笔：只改 11 字节(2216–2386),价格区逐字节不变。
+- **审查修正**:Codex 的 `mockOracleOwner()` 运行时 `readFileSync('program/devnet.json')`,Vercel 函数不会打包该文件，线上所有需要刷新的借款/取款会 500。改为静态 import(本地 `program/out` 仍优先),并以空目录 CommonJS 加载验证。
+- **第 2 步**:合并本 PR,Vercel 部署后线上构建器改用 `refresh_timestamp`。
+- **第 3 步**:部署 enforce 版，验证旧格式与冒充管理员的 write 被拒、管理员 write 通过，并对正式站点跑端到端借还。

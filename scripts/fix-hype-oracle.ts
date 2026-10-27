@@ -34,13 +34,13 @@ async function main() {
     const owners = Buffer.concat([ctx.admin.publicKey.toBuffer(), new PublicKey(SWITCHBOARD_QUEUE).toBuffer()]);
     await send(ctx, 'create tHYPE mock feed', [
       SystemProgram.createAccount({ fromPubkey: ctx.admin.publicKey, newAccountPubkey: feed.publicKey, lamports: rent, space: FEED_SIZE, programId: program }),
-      writeIx(program, feed.publicKey, 0, DISCRIMINATOR), writeIx(program, feed.publicKey, OFFSET.authority, owners),
-      writeIx(program, feed.publicKey, OFFSET.name, name), writeIx(program, feed.publicKey, OFFSET.maxStaleness, staleness),
+      writeIx(program, feed.publicKey, 0, DISCRIMINATOR, ctx.admin.publicKey), writeIx(program, feed.publicKey, OFFSET.authority, owners, ctx.admin.publicKey),
+      writeIx(program, feed.publicKey, OFFSET.name, name, ctx.admin.publicKey), writeIx(program, feed.publicKey, OFFSET.maxStaleness, staleness, ctx.admin.publicKey),
     ], [feed]);
   }
   const slot = await connection.getSlot('confirmed'), timestamp = await connection.getBlockTime(slot);
   if (timestamp === null) throw new Error('chain time unavailable');
-  await send(ctx, `set tHYPE mock price $${price}`, [writeIx(program, feed.publicKey, OFFSET.sampleSize, resultRegion(priceFixed, timestamp, slot))], [feed]);
+  await send(ctx, `set tHYPE mock price $${price}`, [writeIx(program, feed.publicKey, OFFSET.sampleSize, resultRegion(priceFixed, timestamp, slot), ctx.admin.publicKey)], [feed]);
 
   const current = await fetchAccount(ctx, 'bank', bank);
   const oracleKey = current.config.oracleKeys[0] as PublicKey;

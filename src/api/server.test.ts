@@ -14,7 +14,7 @@ test('HTTP routes 200/400/404, CORS, safe 500, bigint JSON, health DB probe with
    const result=await route(db,'GET',url);assert.equal(result.status,200);assert.equal(result.headers['Access-Control-Allow-Origin'],'http://localhost:5173');
    assert.ok(!/api-key|DATABASE_URL|RPC_URL/.test(result.body));assert.ok(JSON.parse(result.body));
   }
-  for(const url of ['/api/activity?limit=NaN','/api/activity?limit=0','/api/activity?limit=1.1','/api/activity?before=bad','/api/activity?bank=invalid','/api/liquidations?bank=invalid','/api/rate-curve','/api/rate-curve?bank=invalid','/api/tx/%ZZ'])assert.equal((await route(db,'GET',url)).status,400);
+  for(const url of ['/api/activity?limit=NaN','/api/activity?limit=0','/api/activity?limit=1.1','/api/activity?before=bad','/api/activity?bank=invalid','/api/activity?kind=other','/api/liquidations?bank=invalid','/api/rate-curve','/api/rate-curve?bank=invalid','/api/tx/%ZZ'])assert.equal((await route(db,'GET',url)).status,400);
   for(const url of ['/missing',`/api/tx/${encodeBase58(Buffer.alloc(64,1))}`,`/api/rate-curve?bank=${encodeBase58(Buffer.alloc(32,1))}`])assert.equal((await route(db,'GET',url)).status,404);
   // 公开配置:没有钱包 RPC 时兑换台地址为 null;有则原样返回(不含 RPC 等敏感配置)。
   assert.deepEqual(JSON.parse((await route(db,'GET','/api/config')).body),{faucet_url:null});

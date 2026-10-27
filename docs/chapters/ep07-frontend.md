@@ -13,7 +13,7 @@ API 只读数据库,不连 RPC,也不碰任何密钥。六个路由:
 | `GET /api/pool` | 每个 bank 的价格、存款、借款、利用率、利率、权重 |
 | `GET /api/rate-curve?bank=` | 利率曲线上的 101 个点,和当前利用率落在哪 |
 | `GET /api/accounts` | 每个账户的头寸、两种健康度、状态 |
-| `GET /api/activity?limit=&before=` | 活动流,稳定游标分页 |
+| `GET /api/activity?limit=&before=&bank=&kind=` | 活动流,稳定游标分页;可按 bank 与 supply/borrow/liquidate 过滤 |
 | `GET /api/tx/:signature` | **交易详情**:同一笔交易的三种形态 |
 | `GET /api/health` | 存活检查 |
 

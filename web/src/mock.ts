@@ -125,10 +125,15 @@ export function installMock() {
     if (url.pathname === '/api/accounts') return ok(accounts);
     if (url.pathname === '/api/activity') {
       const bank = url.searchParams.get('bank');
+      const kind = url.searchParams.get('kind');
       const selected = banks.find((b) => b.address === bank);
-      const filtered = bank ? items.filter((item) => item.bank === bank || item.instruction === 'lending_account_liquidate' && [a.banks.tSOL, a.banks.tUSDC].includes(bank))
-        .map((item) => item.instruction === 'lending_account_liquidate' && selected ? { ...item, bank, bank_label: selected.label } : item) : items;
-      return ok({ items: pendingItem ? [pendingItem, ...filtered] : filtered, next_before: null });
+      const activityItems = pendingItem ? [pendingItem, ...items] : items;
+      const byBank = bank ? activityItems.filter((item) => item.bank === bank || item.instruction === 'lending_account_liquidate' && [a.banks.tSOL, a.banks.tUSDC].includes(bank))
+        .map((item) => item.instruction === 'lending_account_liquidate' && selected ? { ...item, bank, bank_label: selected.label } : item) : activityItems;
+      const byKind = kind === 'supply' ? byBank.filter(item => ['lending_account_deposit', 'lending_account_withdraw'].includes(item.instruction))
+        : kind === 'borrow' ? byBank.filter(item => ['lending_account_borrow', 'lending_account_repay'].includes(item.instruction))
+          : kind === 'liquidate' ? byBank.filter(item => item.instruction === 'lending_account_liquidate') : byBank;
+      return ok({ items: byKind, next_before: null });
     }
     if (url.pathname === '/api/liquidations') {
       const bank = url.searchParams.get('bank');

@@ -71,3 +71,25 @@ test('清算只靠清算事件本身的 asset_bank / liability_bank 也能按 ba
       assert.ok((await getActivity(db, { limit: 100, bank })).items.some(i => i.instruction === 'lending_account_liquidate'), bank);
   } finally { await db.close(); }
 });
+
+test('按活动类型过滤并可与 bank、分页游标组合', async () => {
+  const db = await seedApi();
+  try {
+    const supply = await getActivity(db, { limit: 100, kind: 'supply' });
+    assert.ok(supply.items.length > 0);
+    assert.ok(supply.items.every(i => ['lending_account_deposit', 'lending_account_withdraw'].includes(i.instruction)));
+    const borrow = await getActivity(db, { limit: 100, kind: 'borrow' });
+    assert.ok(borrow.items.length > 0);
+    assert.ok(borrow.items.every(i => ['lending_account_borrow', 'lending_account_repay'].includes(i.instruction)));
+    const liquidate = await getActivity(db, { limit: 100, kind: 'liquidate' });
+    assert.deepEqual(liquidate.items.map(i => i.instruction), ['lending_account_liquidate']);
+    const bankAndKind = await getActivity(db, { limit: 100, kind: 'borrow', bank: run.addresses.banks.tUSDC });
+    assert.ok(bankAndKind.items.length > 0);
+    assert.ok(bankAndKind.items.every(i => ['lending_account_borrow', 'lending_account_repay'].includes(i.instruction) && i.bank === run.addresses.banks.tUSDC));
+    const page = await getActivity(db, { limit: 1, kind: 'supply' });
+    assert.ok(page.next_before);
+    const next = await getActivity(db, { limit: 100, kind: 'supply', before: page.next_before! });
+    assert.ok(next.items.every(i => ['lending_account_deposit', 'lending_account_withdraw'].includes(i.instruction)));
+    await assert.rejects(getActivity(db, { kind: 'other' as never }), /invalid activity kind/);
+  } finally { await db.close(); }
+});

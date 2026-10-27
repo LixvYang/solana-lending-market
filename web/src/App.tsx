@@ -6,7 +6,7 @@ import { usePoll } from './hooks';
 import { Kpis } from './Kpis';
 import { Markets } from './Markets';
 import { SwapPage } from './swap/SwapPage';
-import { Accounts } from './Accounts';
+import { Accounts, ExplorerOverview } from './Accounts';
 import { Activity } from './Activity';
 import { Xray } from './Xray';
 import { TabBar, TabPanel, useMarketSymbol, useTab, type TabDef } from './Tabs';
@@ -108,6 +108,7 @@ export function App() {
               : <><Kpis pool={pool.data} /><div style={{ marginBottom: 16 }}><Markets pool={pool.data} /></div></>}
           </TabPanel>
           <TabPanel id="accounts" active={tab}>
+            {accounts.data && <ExplorerOverview accounts={accounts.data} pool={pool.data} />}
             {activity.data ? <Activity first={activity.data.items} next={activity.data.next_before} pool={pool.data} onOpen={setTx} /> : <div className="card muted">{t.loadingActivity}</div>}
             {accounts.data ? <Accounts accounts={accounts.data} pool={pool.data} /> : <div className="card muted">{t.loadingLiquidations}</div>}
           </TabPanel>

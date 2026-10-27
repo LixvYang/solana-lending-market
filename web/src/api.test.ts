@@ -26,3 +26,15 @@ test('pool banks are ordered by total deposits in USD, with unknown values last'
     globalThis.fetch = originalFetch;
   }
 });
+
+test('activity sends kind together with bank and cursor filters', async () => {
+  const originalFetch = globalThis.fetch;
+  let requested = '';
+  globalThis.fetch = async (input) => { requested = String(input); return new Response(JSON.stringify({ items: [], next_before: null }), { status: 200 }); };
+  try {
+    await api.activity('12:1:signature', 'bank-address', 10, 'borrow');
+    assert.match(requested, /before=12%3A1%3Asignature/);
+    assert.match(requested, /bank=bank-address/);
+    assert.match(requested, /kind=borrow/);
+  } finally { globalThis.fetch = originalFetch; }
+});

@@ -13,7 +13,7 @@ EP7 只读数据库视图与 M7 钱包构建/转发/查询。只读路由只读 
 | queries.ts | 入口 | 池子、利率曲线、账户与历史查询；导出活动/X 光查询 |
 | bank-history.ts | 历史 | 按 Bank data 变化筛选快照，以不晚于该 slot 的 Group/价格和最近交易时间计算指标 |
 | bank-history.test.ts | 测试 | fixture 银行变化、重复快照过滤、历史价格与交易时间 |
-| activity.ts | 活动 | 主事件匹配、slot/ix/signature 稳定分页 |
+| activity.ts | 活动 | 主事件匹配、按 bank/类型过滤、slot/ix/signature 稳定分页 |
 | liquidations.ts | 清算 | 清算事件字段解析、按抵押或债务 bank 过滤 |
 | spans.ts | 教学 | IDL 顶层参数字节范围、bigint 字符串 |
 | xray.ts | X 光 | 原始 top/inner 指令、base64 日志和数据库原始行 |
@@ -23,7 +23,7 @@ EP7 只读数据库视图与 M7 钱包构建/转发/查询。只读路由只读 
 | test-utils.ts | 测试辅助 | PGlite 加载本地 fixtures 与合成价格 |
 | math.test.ts | 测试 | 清算健康金标准、手算利率与超安全整数数量 |
 | queries.test.ts | 测试 | Anchor 快照数量、缺价格、微量债务与 group 费用开关 |
-| activity.test.ts | 测试 | 18 行独立分布、主事件、失败交易和游标平局 |
+| activity.test.ts | 测试 | 18 行独立分布、主事件、失败交易、类型/bank 过滤和游标平局 |
 | liquidations.test.ts | 测试 | 剧本清算前后余额、健康度与双 bank 过滤 |
 | xray.test.ts | 测试 | 原始字节/解码/数据库对照、变量参数和合成 v0 inner |
 | server.test.ts | 测试 | 无 socket 的路由/handle、CORS、参数、脱敏和端口 |

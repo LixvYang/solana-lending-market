@@ -32,6 +32,7 @@ export const swap = {
 };
 
 export const explorer = (signature: string) => `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+export const explorerAddress = (address: string) => `https://explorer.solana.com/address/${address}?cluster=devnet`;
 
 export const b64 = {
   decode: (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)),

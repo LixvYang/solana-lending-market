@@ -33,7 +33,7 @@ export const api = {
   rateCurve: (bank: string) => get<RateCurveView>(`/api/rate-curve?bank=${encodeURIComponent(bank)}`),
   bankHistory: (bank: string) => get<BankHistoryView>(`/api/bank-history?bank=${encodeURIComponent(bank)}`),
   accounts: () => get<AccountView[]>('/api/accounts'),
-  activity: (before?: string, bank?: string, limit = 20) => get<ActivityPage>(`/api/activity?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}${bank ? `&bank=${encodeURIComponent(bank)}` : ''}`),
+  activity: (before?: string, bank?: string, limit = 20, kind?: 'supply' | 'borrow' | 'liquidate') => get<ActivityPage>(`/api/activity?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}${bank ? `&bank=${encodeURIComponent(bank)}` : ''}${kind ? `&kind=${kind}` : ''}`),
   liquidations: (bank?: string) => get<LiquidationItem[]>(`/api/liquidations${bank ? `?bank=${encodeURIComponent(bank)}` : ''}`),
   walletHistory: (wallet: string, before?: string) => get<WalletHistoryPage>(`/api/wallet/${encodeURIComponent(wallet)}/history${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   xray: (signature: string) => get<XrayView>(`/api/tx/${signature}`),

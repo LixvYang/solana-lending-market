@@ -4,6 +4,7 @@ import type { Db } from '../store/db';
 import { toJson } from '../store/json';
 import { decodeBase58 } from '../core/base58';
 import { getPool, getAccounts, getRateCurve, getBankHistory, getActivity, getXray } from './queries';
+import type { ActivityKind } from './activity';
 import { getLiquidations } from './liquidations';
 import { ApiError } from './errors';
 import { readJson, corsHeaders, allowOrigin } from './http-body';
@@ -93,7 +94,8 @@ export async function route(db: Db, method: string, requestUrl: string, input?: 
         if (value !== null && !/^\d+$/.test(value))
           throw new ApiError(400, 'invalid limit');
         const bank = url.searchParams.has('bank') ? address(url.searchParams.get('bank'), 32) : undefined;
-        body = await getActivity(db, { limit: value === null ? undefined : Number(value), before: url.searchParams.get('before') ?? undefined, bank });
+        const kind = url.searchParams.get('kind') ?? undefined;
+        body = await getActivity(db, { limit: value === null ? undefined : Number(value), before: url.searchParams.get('before') ?? undefined, bank, kind: kind as ActivityKind | undefined });
         break;
       }
       case '/api/liquidations': {

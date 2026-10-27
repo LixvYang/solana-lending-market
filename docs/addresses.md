@@ -53,10 +53,22 @@ solana balance -u devnet <钱包地址>
 
 由固定字符串确定性派生(`scenario/lib/actors.ts`),不落盘密钥。
 
-| 角色 | 钱包 | marginfi 账户 |
-|---|---|---|
+| 角色 | 钱包 | marginfi 账户 | 仓位 |
+|---|---|---|---|
 | alice | `J8H3S29MjSzXvp1Jm4JhnPwJnqY4yCsfaMX3cTuvwJh3` | `2yDJ1WYiAf7kL1t4fSmTkx91wPJFSEhMkUZdWo526Pbb` |
 | bob | `Abh88w383B3EhJYpSoxNV55qL5dG3czNGyQx7hcUPj9S` | `J3qhTbWkvqqu6jyjHQLmj9kkZ9GkYAxuFrDrSLrwx54r` |
 | carol | `Dzv4jmLwyyo3B9S7jYgAyBWQtFsfQVYysAZTv9B4QPVb` | `J3VRUhRDd3Xo5ef8HtmdjFmKoQ4JQcEAjcuSLMRTwDYZ` |
+
+## 演示账户(T27)
+
+由 `scripts/seed-demo.ts` 随机生成(2026-10-27 执行)。链上数据页以 `demo-…` 名字显示，访客能看出是演示账户。私钥只保存在本机 `~/.config/solana/lending-market-demo/` 下,不提交到仓库。
+
+| 角色 | 钱包 | marginfi 账户 | 仓位 |
+|---|---|---|---|
+| demo-lender | `9aUjRjKp8NEXV9ZwSkzivX3wcrWTVWqeQS9hRv81wHE9` | `F1br6FzLsWCHCS2rCedLFpcEZczB1P1jt7SDLfbovvdu` | 存 60 tHYPE |
+| demo-borrower-1 | `2D3VWVTnMnQhAcoMNQzPmUgqydPpsDTr4mZmnAUAmPTd` | `AkTdQGTqwFFEtVGPxpqnmqfiU5RHBfxfuKgaQQ8TE8d7` | 存 0.3 pBTC;借 7000 tUSDC、0.4 pETH、9 tHYPE、60 tSOL |
+| demo-borrower-2 | `HXsDwfB5HE4ntLGZBa5pjqGMMR7wSrE2fJwMQndtc8r8` | `AVjjp5gFXV7W51DT1A459TgJ7EsFpDpYemP9zh2qdVPK` | 存 4 pETH、250 tSOL;借 4600 tUSDC、0.05 pBTC |
+| demo-borrower-3 | `8b6zChqHtn6jAPkm6ebGAQoG3LXwoQUKmuuJ1QonPfwP` | `BKmtXcv7ARndgQUpUEpKat695RN5W3burbwy6jXXoWj4` | 存 80 pSOL、155 tSOL(净额);借 4000 tUSDC、9 tHYPE |
+| demo-borrower-4 | `MgmwMsz3Sguv9bFxd1WWC1MtrWD9J2TyR4avstbPPpJ` | `6sWTXaLwpHaokBTa9iWmjcopmctAKA9VFszCdB5bL7Q8` | 存 9000 tUSDC;借 20 pSOL、25 tSOL |
 
 SYNC: 新增资产、换钱包或重新部署时同步本表、`program/devnet.json` 与 `docs/deploy.md`。

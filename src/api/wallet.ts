@@ -25,7 +25,7 @@ export async function getWallet(db: Db, services: WalletServices, input: unknown
   const lamports = walletInfo?.lamports ?? 0;
   if (!Number.isSafeInteger(lamports) || lamports < 0) throw new Error('unsafe balance');
   const tokens = pool.banks.map((b, i) => ({ bank: b.address, mint: b.mint, label: b.label,
-    decimals: b.decimals, amount: String(ataAmount(atas[i], infos[i], new PublicKey(b.mint), wallet)) }));
+    decimals: b.decimals, amount: String(ataAmount(atas[i], infos[i], new PublicKey(b.mint), wallet)), has_account: infos[i] !== null }));
   const user = pool.group ? await walletAccount(db, wallet.toBase58(), pool.group) : null;
   return { wallet: wallet.toBase58(), sol_lamports: String(lamports), tokens, marginfi_account: user?.address ?? null, faucet_url: services.faucetUrl ?? null };
 }

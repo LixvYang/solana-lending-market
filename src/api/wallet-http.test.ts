@@ -29,6 +29,7 @@ test('wallet returns exact SPL balances, missing ATA=0, SOL/account/faucet and r
     assert.equal(calls, 1);
     assert.equal(view.sol_lamports, '123456789'); assert.equal(view.marginfi_account, a.marginfiAccounts.bob); assert.equal(view.faucet_url, svc.faucetUrl);
     assert.equal(view.tokens.find(t => t.mint === a.mints.tUSDC)?.amount, '18446744073709551615'); assert.equal(view.tokens.find(t => t.mint === a.mints.tSOL)?.amount, '0');
+    assert.equal(view.tokens.find(t => t.mint === a.mints.tUSDC)?.has_account, true); assert.equal(view.tokens.find(t => t.mint === a.mints.tSOL)?.has_account, false);
     const missing = await getWallet(db, services({ getBalance: async () => { throw Error('getBalance must not be called'); },
       getMultipleAccountsInfo: async () => [null, ...Array.from({ length: 6 }, () => null)] }), deriveKeypair('m7/fresh').publicKey.toBase58());
     assert.equal(missing.sol_lamports, '0');

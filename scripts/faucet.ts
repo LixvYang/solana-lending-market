@@ -13,6 +13,7 @@ import { nativeAmount } from '../src/faucet/config';
 import { insertDeskEvent } from '../src/store/desk-events';
 import { createFaucetReservations } from '../src/store/faucet-reservations';
 import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { serviceKeypair, cliRpc } from './admin-runtime';
 async function main() {
   const args = process.argv.slice(2);
@@ -28,8 +29,9 @@ async function main() {
   const tokens = banks.filter(b => ['tSOL', 'tUSDC', 'tHYPE', 'pSOL', 'pBTC', 'pETH'].includes(b.label) && b.oracle_feed);
   const assets: SwapAssetConfig[] = [{ symbol: 'SOL', decimals: 9 },
     ...tokens.map(b => ({ symbol: b.label as SwapAssetConfig['symbol'], decimals: b.decimals, mint: new PublicKey(b.mint) }))];
+  const deskAccounts = Object.fromEntries(assets.map(asset => [asset.symbol, asset.mint ? getAssociatedTokenAddressSync(asset.mint, payer.publicKey) : payer.publicKey]));
   const oracles = { SOL: pythPushAccount(FEED_IDS['SOL/USD']), ...Object.fromEntries(tokens.map(b => [b.label, new PublicKey(b.oracle_feed!)])) };
-  const swap = createSwap(payer, rpc, { assets, price: oraclePrices(rpc, oracles),
+  const swap = createSwap(payer, rpc, { assets, deskAccounts, price: oraclePrices(rpc, oracles, undefined, Object.values(deskAccounts)),
     minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') }, undefined,
     (signature, wallet, from, to) => insertDeskEvent(db, { signature, wallet, kind: 'swap', from, to, status: 'confirmed' }));
   const reservations = createFaucetReservations(db);

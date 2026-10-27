@@ -8,11 +8,11 @@ import { fmtToken, fmtUsd, toNative } from '../format';
 import { SourceChip } from '../tokens';
 import { b64, deskBase, swap } from '../wallet/chain';
 import { TokenPicker } from './TokenPicker';
+import { SwapDetails } from './SwapDetails';
+import { deskIsShort } from './stock';
 import { errorText, useT } from '../i18n';
 
 const KEEP_SOL = 10_000_000n; // 卖出 SOL 时留 0.01 SOL 付手续费和账户租金
-const ATA_RENT_SOL = '0.00204'; // 新建代币账户的租金(2,039,280 lamports)
-
 /**
  * 兑换页,版式参照 Jupiter / Uniswap:上面"卖出"、下面"买入",中间翻转;一个主按钮,文案告诉你还差什么。
  * 汇率 = 两边资产在借贷池里用的同一个价格(SOL、pSOL 是 Pyth 实时,tSOL、tUSDC 是 mock)。
@@ -28,6 +28,7 @@ export function SwapPage({ faucetUrl, onDone, wallet: info, onResult, active }: 
   const [to, setTo] = useState<SwapAsset>('pSOL');
   const [amount, setAmount] = useState('');
   const [invert, setInvert] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ ok: boolean; text: string; link?: string } | null>(null);
 
@@ -46,7 +47,7 @@ export function SwapPage({ faucetUrl, onDone, wallet: info, onResult, active }: 
   const stale = [from, to].find((s) => rates && asset(s)?.usd == null);
   const problem = !base ? t.swapNotConfigured : !rates ? t.ratesLoading : stale ? t.priceUnavailable(stale) : !amount || inBig === 0n ? t.enterAmount
     : !nativeIn ? t.invalidAmount : !connected ? null : !info ? t.balanceLoading : inBig > spendable(from) ? t.insufficientBalance(from)
-    : usdIn! < minUsd ? t.minTrade(rates!.min_usd) : usdIn! > maxUsd ? t.maxTrade(rates!.max_usd) : null;
+    : usdIn! < minUsd ? t.minTrade(rates!.min_usd) : usdIn! > maxUsd ? t.maxTrade(rates!.max_usd) : deskIsShort(out, asset(to)?.desk_available) ? t.apiDeskInsufficient(to) : null;
   const rate = rates && micro(from) > 0n && micro(to) > 0n ? (invert ? Number(micro(to)) / Number(micro(from)) : Number(micro(from)) / Number(micro(to))) : null;
 
   const pick = (side: 'from' | 'to') => (s: string) => {
@@ -82,30 +83,23 @@ export function SwapPage({ faucetUrl, onDone, wallet: info, onResult, active }: 
   return (
     <div className="swap-wrap">
       <div className="swap card">
-        <div className="swap-title"><h2>{t.swap}</h2></div>
         <div className="swap-box">
           <div className="swap-row"><span className="label">{t.sell}</span>
             {connected && <span className="muted">{t.balance} {shown(from)}
               <button className="pill" onClick={() => fill(2n)} type="button">{t.half}</button><button className="pill" onClick={() => fill(1n)} type="button">{t.max}</button></span>}</div>
           <div className="swap-row"><input className="amount" inputMode="decimal" placeholder="0" value={amount} onChange={(e) => { setAmount(e.target.value); setNote(null); }} aria-label={t.sellAmount} />
             <TokenPicker value={from} options={options} onChange={pick('from')} label={t.sellToken} /></div>
-          <div className="swap-row muted"><span>{usdIn != null ? fmtUsd(usdIn) : ' '}</span><SourceChip source={asset(from)?.source} /></div>
+          <div className="swap-row muted"><span>{usdIn != null ? fmtUsd(usdIn) : ' '}{usdIn != null && <SourceChip source={asset(from)?.source} />}</span></div>
         </div>
         <div className="flip-wrap"><button className="flip" onClick={flip} type="button" aria-label={t.flipDirection} title={t.flipDirection}>↓↑</button></div>
         <div className="swap-box">
           <div className="swap-row"><span className="label">{t.buyEstimate}</span>{connected && <span className="muted">{t.balance} {shown(to)}</span>}</div>
           <div className="swap-row"><span className="amount out">{out != null && out > 0n ? fmtToken(out.toString(), dec(to), 6) : '0'}</span>
             <TokenPicker value={to} options={options} onChange={pick('to')} label={t.buyToken} /></div>
-          <div className="swap-row muted"><span>{usdIn != null ? `≈ ${fmtUsd(usdIn)}` : ' '}</span><SourceChip source={asset(to)?.source} /></div>
+          <div className="swap-row muted"><span>{usdIn != null ? `≈ ${fmtUsd(usdIn)}` : ' '}{usdIn != null && <SourceChip source={asset(to)?.source} />}</span></div>
         </div>
-        {rate != null && (
-          <dl className="swap-details">
-            <div><dt>{t.rate}</dt><dd><button className="linkish" onClick={() => setInvert(!invert)} type="button">1 {invert ? to : from} ≈ {Number(rate.toPrecision(6))} {invert ? from : to} ⇄</button></dd></div>
-            <div><dt>{t.unitPrice}</dt><dd>{from} ${asset(from)?.usd}, {to} ${asset(to)?.usd}</dd></div>
-            <div><dt>{t.slippage}</dt><dd>{t.noSlippage}</dd></div>
-            <div><dt>{t.networkFee}</dt><dd>{t.feeEstimate(ATA_RENT_SOL)}</dd></div>
-            <div><dt>{t.tradeLimit}</dt><dd>${rates!.min_usd} – ${rates!.max_usd}</dd></div>
-          </dl>)}
+        {rate != null && inBig > 0n && rates && <SwapDetails rates={rates} from={from} to={to} invert={invert} onInvert={() => setInvert(!invert)}
+          open={detailsOpen} onOpen={() => setDetailsOpen(!detailsOpen)} wallet={info} />}
         <button className="btn primary block lg" onClick={exchange} disabled={Boolean(busy) || (connected && Boolean(problem))}>{label}</button>
         {note && <div className={`notice ${note.ok ? 'ok' : 'bad'}`}>{note.ok ? '✓ ' : ''}{note.text}</div>}
       </div>

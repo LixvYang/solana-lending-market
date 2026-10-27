@@ -1,6 +1,6 @@
 /** INPUT: 专用钱包、RPC、资产配置与报价时读取的 USD 单价。 OUTPUT: 兑换报价(兑换台已签名的交易)与受限转发。 POSITION: 兑换台,只提供资产、不垫付 SOL 手续费。 SYNC: folder.md。 */
 import { ComputeBudgetProgram, Keypair, PublicKey, SystemInstruction, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, TokenInstruction, createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction, decodeTransferInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, TokenInstruction, createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction, decodeTransferInstruction, getAssociatedTokenAddressSync, unpackAccount } from '@solana/spl-token';
 import { ApiError } from '../api/errors';
 import { guardTransaction, submitSigned } from '../api/send';
 import { tokenBalance } from '../api/wallet';
@@ -24,8 +24,10 @@ export interface PriceReader {
   (asset: SwapAssetConfig): Promise<{ usdMicro: bigint; source: OracleSource }>;
   /** 报价要绕过汇率表缓存,确保签名交易按此刻链上价格计算。 */
   fresh?: PriceReader;
+  /** 与价格账户共用一次 RPC 批读的账户,用于读取兑换台库存。 */
+  accounts?: (keys: PublicKey[]) => Promise<({ lamports: number; data: Buffer } | null)[]>;
 }
-export interface SwapConfig { assets: SwapAssetConfig[]; price: PriceReader; minUsdMicro: bigint; maxUsdMicro: bigint; /** 兑换台至少保留的 SOL(付 ATA 租金等)。 */ keepLamports?: bigint }
+export interface SwapConfig { assets: SwapAssetConfig[]; price: PriceReader; minUsdMicro: bigint; maxUsdMicro: bigint; deskAccounts?: Partial<Record<SwapAsset, PublicKey>>; /** 兑换台至少保留的 SOL(付 ATA 租金等)。 */ keepLamports?: bigint }
 
 // #region ep8-swap-math
 /**
@@ -91,11 +93,23 @@ export function createSwap(desk: Keypair, rpc: WalletRpc, config: SwapConfig, cl
   return {
     async rates(): Promise<SwapRatesView> {
       // 逐个资产取价，单个预言机暂不可用不应拖垮其他资产的报价。
-      const settled = await Promise.allSettled(config.assets.map(a => config.price(a)));
+      const [settled, deskInfos] = await Promise.all([
+        Promise.allSettled(config.assets.map(a => config.price(a))),
+        config.deskAccounts && config.price.accounts
+          ? config.price.accounts(config.assets.map(a => config.deskAccounts![a.symbol]!))
+          : Promise.resolve(null),
+      ]);
       return { assets: config.assets.map((a, i) => {
         const r = settled[i];
-        return r.status === 'fulfilled' ? { symbol: a.symbol, decimals: a.decimals, usd: ui(r.value.usdMicro, 6), source: r.value.source }
-          : { symbol: a.symbol, decimals: a.decimals, usd: null, source: null, unavailable: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+        const info = deskInfos?.[i] ?? null;
+        const balance = deskInfos ? a.mint
+          ? info ? unpackAccount(config.deskAccounts![a.symbol]!, info as never, TOKEN_PROGRAM_ID).amount : 0n
+          : BigInt(info?.lamports ?? 0) > keep ? BigInt(info!.lamports) - keep : 0n : 0n;
+        // 没配置兑换台账户时库存未知(null),前端不能据此拦截兑换。
+        const inventory = { desk_available: deskInfos ? String(balance) : null };
+        const token = { symbol: a.symbol, mint: a.mint?.toBase58() ?? null, decimals: a.decimals };
+        return r.status === 'fulfilled' ? { ...token, usd: ui(r.value.usdMicro, 6), source: r.value.source, ...inventory }
+          : { ...token, usd: null, source: null, unavailable: r.reason instanceof Error ? r.reason.message : String(r.reason), ...inventory };
       }),
         min_usd: ui(config.minUsdMicro, 6), max_usd: ui(config.maxUsdMicro, 6) };
     },

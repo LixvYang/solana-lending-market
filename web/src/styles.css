@@ -194,8 +194,6 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 /* 兑换 / 操作表单共用的输入框 */
 .swap-wrap { max-width: 480px; margin: 4px auto 0; }
 .swap { padding: 16px; }
-.swap-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.swap-title h2 { margin: 0; font-size: 14px; } .swap-title .muted { font-size: 12px; }
 .swap-box { padding: 12px 14px; border-radius: 8px; background: var(--slate-3); border: 0.5px solid var(--slate-7); }
 .swap-box:focus-within { border-color: var(--blue-8); }
 .swap-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 22px; font-size: 12px; }
@@ -206,7 +204,12 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .flip-wrap { display: flex; justify-content: center; height: 8px; position: relative; z-index: 1; }
 .flip { position: relative; top: -14px; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--ink-2); background: var(--slate-3); border: 0.5px solid var(--slate-7); }
 .flip:hover { color: var(--ink); background: var(--slate-4); }
-.swap-details { margin: 12px 2px 0; font-size: 12px; }
+.swap-summary { display: flex; align-items: center; gap: 8px; margin: 12px 2px 0; min-width: 0; font-size: 12px; }
+.swap-summary > .linkish { white-space: nowrap; }
+.swap-cost { display: flex; gap: 6px; margin-left: auto; color: var(--ink-3); white-space: nowrap; }
+.swap-expand { display: grid; place-items: center; flex: 0 0 24px; height: 24px; padding: 0; color: var(--ink-2); background: var(--slate-3); border: 0.5px solid var(--slate-7); border-radius: 8px; cursor: pointer; }
+.swap-expand svg path, .chev path { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.swap-details { margin: 8px 2px 0; font-size: 12px; }
 .swap-details div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .swap-details dt { color: var(--ink-3); white-space: nowrap; } .swap-details dd { margin: 0; text-align: right; color: var(--ink-2); }
 .swap-foot { text-align: center; font-size: 12px; margin: 12px 8px; }
@@ -214,7 +217,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .picker-btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; color: var(--ink); padding: 5px 10px 5px 6px; border: 0.5px solid var(--slate-7); border-radius: 8px; cursor: pointer; background: var(--slate-3); }
 .picker-btn:hover { background: var(--slate-4); }
 .picker-btn:active { background: var(--slate-5); }
-.chev { color: var(--ink-3); font-size: 12px; }
+.chev { color: var(--ink-3); flex: 0 0 12px; }
 .picker-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 270px; margin: 0; padding: 6px; list-style: none; background: var(--surface); border-radius: 12px; box-shadow: none; }
 .picker-list button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font: inherit; color: var(--ink); text-align: left; }
 .picker-list button:hover, .picker-list button.on { background: var(--blue-3); }

@@ -83,8 +83,14 @@ export function TokenName({ symbol, size = 32, sub }: { symbol: string; size?: n
   );
 }
 
-/** 只显示用户需要辨认的 Pyth 行情来源。 */
+/** 价格右侧的 Pyth 标志：只标出真实行情;mock 价格不标(作者要求，2026-10-26)。 */
 export function SourceChip({ source }: { source: string | null | undefined }) {
   const { t } = useT();
-  return source === 'pyth' ? <span className="src live">{t.sourcePyth}</span> : null;
+  if (source !== 'pyth') return null;
+  // Pyth 标志：两道同心圆弧构成的 "P"(按官方图形手绘，currentColor 跟随主题)。
+  return <span className="src-pyth" role="img" aria-label={t.sourcePyth} title={t.sourcePyth}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+      <path d="M4 22V11a8 8 0 1 1 8 8" /><path d="M8.5 18V11a3.5 3.5 0 1 1 3.5 3.5" />
+    </svg>
+  </span>;
 }

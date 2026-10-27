@@ -48,7 +48,7 @@ export const zh = {
   tokenThypeName: '固定价格测试 HYPE', tokenThypeDescription: '测试用 HYPE,价格由我们固定为 $80,后台程序定时写上链;仅用于 devnet 借贷演示。',
   tokenTsolName: '测试 SOL', tokenTsolDescription: '用于借贷与清算演示的测试 SOL，价格由项目控制。',
   tokenTusdcName: '测试 USDC', tokenTusdcDescription: '用于借款与清算演示的测试稳定币，按 $1 计价。',
-  sourcePyth: 'Pyth 实时', sourceMock: 'mock 价', testTokenBadge: '测试币',
+  sourcePyth: 'Pyth 实时价格', sourceMock: 'mock 价', testTokenBadge: '测试币',
   xrayTitle: '交易详情', xrayClose: '关闭', xrayCopySignature: '复制签名', xrayOpenExplorer: '在 Solana Explorer 打开 ↗', explorerLink: 'Explorer ↗',
   xrayHowTitle: '如何阅读此交易', xrayRawBytes: '链上原始字节', xrayRawExplanation: '交易里实际存的数据，按字段着色', xrayDecoded: '解码结果', xrayDecodedExplanation: '按 IDL 把字节读成字段；鼠标移到任一段，两边同步高亮', xrayDatabaseRow: '数据库行', xrayDatabaseExplanation: '存进数据库后的样子',
   xrayLoading: '加载中…', xrayMissingRow: '（没有对应的行）', xrayDecodeError: (error: string) => `解码错误：${error}`,

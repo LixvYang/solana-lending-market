@@ -157,9 +157,11 @@ pre.json { margin: 0; font: 12px/1.45 ui-monospace, 'SF Mono', Menlo, monospace;
 .token-name > span { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .token-name b { font-size: 14px; }
 .token-name .muted { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.src { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 1px 7px; border-radius: 8px; color: var(--ink-2); background: var(--slate-3); white-space: nowrap; vertical-align: middle; }
-.src.live { color: var(--live); background: var(--violet-3); }
-.src.live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.src-pyth { display: inline-flex; flex-shrink: 0; width: 14px; height: 14px; margin-left: 4px; color: var(--live); vertical-align: -2px; }
+.src-pyth svg { width: 100%; height: 100%; }
+.price-cell { display: inline-flex; align-items: center; justify-content: flex-end; }
+/* 没有 Pyth 标志的价格留出同宽空位，整列数字右端对齐。 */
+.price-cell:not(:has(.src-pyth))::after { content: ''; width: 18px; flex-shrink: 0; }
 
 /* 借贷池:市场列表 */
 .card.flush { padding: 0; overflow: hidden; }
@@ -170,7 +172,6 @@ table.markets td.n > div:first-child { font-variant-numeric: tabular-nums; }
 table.markets .muted { font-size: 12px; }
 table.markets .apr { font-weight: 600; font-variant-numeric: tabular-nums; }
 table.markets .apr-supply { color: var(--supply); } table.markets .apr-borrow { color: var(--borrow); }
-table.markets td .src { margin-top: 3px; }
 .util { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .util .meter { width: 64px; margin: 0; height: 6px; }
 td.actions { text-align: right; white-space: nowrap; } td.actions .btn + .btn { margin-left: 6px; }
@@ -342,7 +343,7 @@ table.params { margin-top: 10px; } table.params td { padding: 7px 0; font-size: 
 .liquidation-table { min-width: 660px; }
 .activity-more { margin: 12px 0 0; text-align: center; }
 
-.badge, .chip, .ix, .src, .net, .count { border-radius: 4px; }
+.badge, .chip, .ix, .net, .count { border-radius: 4px; }
 .btn, .picker-btn, .asset-fixed, .pill { border: 0.5px solid var(--slate-7); }
 .transaction-toast, .drawer, .picker-list { border: 0.5px solid var(--slate-6); }
 .sync-status { color: var(--slate-11); font-size: 12px; font-weight: 400; margin-left: 8px; }

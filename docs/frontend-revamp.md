@@ -786,7 +786,7 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **表头与数据列错位约 35px**:表头和每行是各自的网格，`auto` 列宽算得不同。改为固定列宽，实测各列右边界逐一相等。
 - **浏览器验收**:未连接(4 步引导)、模拟数据未存款(引导停在第 4 步、可借提示先存抵押)、有存款无借款(引导隐藏、标题汇总、按钱包美元值排序)、有借款(bob 在 devnet 借 0.1 pSOL:健康度 79%、清算距离条 21%、借款汇总 APR 8.57% 与已用额度 22%,验收后已全额还款);深色 390 英文退回两行卡片、无溢出。
 
-### T26 修复 mock 价格可被任何人改写(安全)— 进行中(三步上线)
+### T26 修复 mock 价格可被任何人改写(安全)— done
 
 **漏洞**:tSOL/tUSDC/tHYPE 的 mock 价格账户由 mocks 程序的 `write(offset, data)` 写入，只要求目标账户签名;而价格账户密钥由公开字符串派生(`deriveKeypair('feed/<代币>')`),任何人都能算出并改价，进而用虚高抵押借空池子或把别人压到可清算。
 
@@ -815,3 +815,5 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **审查修正**:Codex 的 `mockOracleOwner()` 运行时 `readFileSync('program/devnet.json')`,Vercel 函数不会打包该文件，线上所有需要刷新的借款/取款会 500。改为静态 import(本地 `program/out` 仍优先),并以空目录 CommonJS 加载验证。
 - **第 2 步**:合并本 PR,Vercel 部署后线上构建器改用 `refresh_timestamp`。
 - **第 3 步**:部署 enforce 版，验证旧格式与冒充管理员的 write 被拒、管理员 write 通过，并对正式站点跑端到端借还。
+- **第 2 步(已完成)**:PR #10 合并，Vercel 正式部署后对正式站点跑端到端：借款交易含两条 `refresh_timestamp`(tSOL、tUSDC)、只有用户 1 个签名。
+- **第 3 步(已完成)**:部署 enforce 版(slot 515667939)。devnet 模拟：旧格式 write 与冒充管理员的 write 均报 MissingRequiredSignature,管理员 write 通过,`refresh_timestamp` 仍公开可用;正式站点端到端存借还再次全部通过。本地 API/兑换台已切到新代码重启。链上旧程序备份在 scratchpad(`mocks-backup-onchain.so`),需要回滚时以管理员钱包重新部署。

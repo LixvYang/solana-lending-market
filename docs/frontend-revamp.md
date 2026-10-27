@@ -860,3 +860,40 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - **第 3 步**:部署 enforce 版，验证旧格式与冒充管理员的 write 被拒、管理员 write 通过，并对正式站点跑端到端借还。
 - **第 2 步(已完成)**:PR #10 合并，Vercel 正式部署后对正式站点跑端到端：借款交易含两条 `refresh_timestamp`(tSOL、tUSDC)、只有用户 1 个签名。
 - **第 3 步(已完成)**:部署 enforce 版(slot 515667939)。devnet 模拟：旧格式 write 与冒充管理员的 write 均报 MissingRequiredSignature,管理员 write 通过,`refresh_timestamp` 仍公开可用;正式站点端到端存借还再次全部通过。本地 API/兑换台已切到新代码重启。链上旧程序备份在 scratchpad(`mocks-backup-onchain.so`),需要回滚时以管理员钱包重新部署。
+
+### T27 演示流动性：真实利率曲线 + 演示账户借贷 — todo
+
+作者要求让资金池有利用率和利息，外部访客看到的不是一片 0。作者已定：①利率曲线改成接近真实市场;②先一次性铺好借贷(暂不做每日自动借还)。
+
+**现状**:所有 6 个银行利率参数相同：最优利用率 50%、该点借款利率 60%、满利用率 300%,固定费 4%/年(协议 3%+保险 1%),按比例费 6%。利用率 30% 时借款 APR 已 42%,不像真实市场。
+
+**Claude 已定的参数(不要改):**
+- 稳定币(tUSDC):`optimal_utilization_rate=0.8`、`plateau_interest_rate=0.07`、`max_interest_rate=1.0`。
+- 波动资产(tSOL、pSOL、pETH、pBTC、tHYPE):`optimal=0.45`、`plateau=0.08`、`max=1.5`。
+- 全部：`protocol_ir_fee=0.05`、`insurance_ir_fee=0.05`、`protocol_fixed_fee_apr=0`、`insurance_fee_fixed_apr=0`、`protocol_origination_fee` 不改。
+- 演示仓位(数量为 UI 单位):
+
+| 账户 | 存入 | 借出 |
+|---|---|---|
+| demo-lender | tHYPE 60 | — |
+| demo-borrower-1 | pBTC 0.3 | tUSDC 7000、pETH 0.4、tHYPE 9 |
+| demo-borrower-2 | pETH 4、tSOL 250 | tUSDC 4600、pBTC 0.05 |
+| demo-borrower-3 | pSOL 80、tSOL 200 | tUSDC 4000、tSOL 45、tHYPE 9 |
+| demo-borrower-4 | tUSDC 9000 | pSOL 20、tSOL 25 |
+
+  预计：tUSDC 利用率 ~57%(借 5.5%/存 2.9%),tHYPE ~30%,其余 10–19%;各借款账户已用借款额度 40–54%。
+
+**要做:**
+1. `scripts/set-rate-curve.ts`(管理员,`createContext` 风格同 `add-pyth-bank.ts`):对本池 6 个银行(地址见 `program/devnet.json` + labels/`docs/addresses.md`)发 `lending_pool_configure_bank`,`BankConfigOpt` 只设 `interest_rate_config`(`InterestRateConfigOpt` 各项按上表，origination 为 null),其余字段 null。支持 `--dry-run`(打印将写入的数值，不发交易)。幂等：链上已是目标值则跳过。
+2. `scripts/seed-demo.ts`(管理员运行):
+   - 演示钱包**随机生成**,私钥文件存 `~/.config/solana/lending-market-demo/<名字>.json`(权限 600),已存在则复用;**绝不**用公开字符串派生(否则任何人可接管仓位)。
+   - 管理员给每个钱包转 0.05 SOL(余额不足才补),对每个钱包需要的代币 `mintTo`(管理员是 6 种 mint 的 mint authority;按需创建 ATA,管理员付租金)。
+   - 存款/借款**走现有 API**(`/api/build` → 本地签名 → `/api/send`,同 `scripts/e2e-wallet.ts`),`API_URL` 参数指定(默认本地 8787),以复用构建器的 remaining accounts 与价格刷新逻辑。
+   - 幂等：按链上当前仓位补齐差额(已存/已借够了就跳过);每步打印签名。`--dry-run` 只打印计划。
+   - 把纯计算(差额、计划)放成纯函数并测试。
+3. `scripts/label-demo.ts` 或在 seed 末尾：把演示钱包与其 marginfi 账户写入 labels(钱包用 `actors` 类、marginfi 账户用 `marginfiAccounts` 类，名字如 `demo-borrower-1`),对 `DATABASE_URL` 指定的库执行(Claude 会对本地库和 Supabase 各跑一次)。复用 `src/store/labels`。
+4. 文档:`docs/decisions.md` D-030(为何改曲线、为何波动资产利用率天然偏低——借 1 美元需约 2.75 美元抵押，全市场平均利用率上限约 30%;演示账户私钥不入库);`docs/addresses.md` 增"演示账户"一节(地址在执行后由 Claude 填)。
+
+**测试**:利率参数编码(I80F48)与 dry-run 输出;seed 差额计算(已有部分仓位时只补差额);私钥路径不在仓库内。
+
+**验收**:与 CI 相同的检查。上链执行与验证由 Claude 完成。

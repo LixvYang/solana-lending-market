@@ -3,7 +3,7 @@
  * 数值取自真实剧本的结束状态；`?mock=liquidation` 改成"清算前一刻的 Bob"，用来看可清算状态的样子。
  * 不属于产品代码，生产构建不会引入它(只在 import.meta.env.DEV 下动态加载)。
  */
-import type { AccountView, ActivityItem, BankHistoryView, BankView, LiquidationItem, PoolView, RateCurveView, RatePoint } from '@contract';
+import type { AccountView, ActivityItem, BankHistoryView, BankView, LiquidationItem, PoolView, RateCurveView, RatePoint, WalletHistoryItem } from '@contract';
 import run from '../../fixtures/m1-run.json';
 import xray from './mock-xray.json';
 import devnet from '../../program/devnet.json';
@@ -26,7 +26,7 @@ export function installMock() {
     return { address, mint, label, decimals, price, price_updated_at: new Date().toISOString(), oracle_feed: null, oracle_source: 'mock', total_deposits: dep, total_borrows: bor,
       total_deposits_usd: depUsd, total_borrows_usd: borUsd, utilization: u, lending_apr: rates(u).lending_apr, borrowing_apr: rates(u).borrowing_apr,
       weights: label !== 'tUSDC' ? { asset_init: 0.8, asset_maint: 0.9, liability_init: 1.1, liability_maint: 1.05 } : { asset_init: 1, asset_maint: 1, liability_init: 1.1, liability_maint: 1.05 },
-      curve, asset_share_value: '1.000000155398776513', liability_share_value: '1.000000445109712643', last_accrual_at: new Date().toISOString() };
+      curve, risk_price: null, asset_share_value: '1.000000155398776513', liability_share_value: '1.000000445109712643', last_accrual_at: new Date().toISOString() };
   };
   const banks = [
     bank(a.banks.tUSDC, 'tUSDC', a.mints.tUSDC, 6, 1, liquidation ? '16000000000' : '14512501895', liquidation ? '5000001696' : '0', liquidation ? 16000 : 14512.5, liquidation ? 5000 : 0),
@@ -63,7 +63,7 @@ export function installMock() {
     const who = ['alice', 'bob', 'carol'].find((p) => s.label.includes(p)) ?? null;
     const amt = /(\d[\d,]*) (tUSDC|tSOL)/.exec(s.label);
     return { signature: s.signatures[0], slot: String(s.slot), block_time: new Date(1791733900000 + Number(s.slot) % 1000 * 400).toISOString(), ix_index: 1,
-      instruction: nameOf(s.label)!, event: null, account: who ? (a.marginfiAccounts as Record<string, string>)[who] : null, account_label: who, bank: tok ? (a.banks as Record<string, string>)[tok] : null,
+      instruction: nameOf(s.label)!, event: null, account: who ? (a.marginfiAccounts as Record<string, string>)[who] : null, account_label: who, authority: who ? (a.actors as Record<string, string>)[who] ?? null : null, authority_label: who, bank: tok ? (a.banks as Record<string, string>)[tok] : null,
       bank_label: tok, amount: amt ? String(BigInt(amt[1].replace(/,/g, '')) * 10n ** BigInt(amt[2] === 'tSOL' ? 9 : 6)) : null, ok: true };
   });
   const liquidationStep = run.steps.find((s) => s.label.includes('liquidate'))!;
@@ -76,14 +76,19 @@ export function installMock() {
   let submitted: { action: string; bank: string; amount: string } | null = null;
   let pendingItem: ActivityItem | null = null;
   const mockSignature = '5mockSignature1111111111111111111111111111111111111111111111111111111111111111111111';
+  const history: WalletHistoryItem[] = [
+    { time: new Date().toISOString(), kind: 'swap', assets: [{ symbol: 'SOL', amount: '10000000', decimals: 9 }, { symbol: 'tUSDC', amount: '1500000', decimals: 6 }], result: 'confirmed', signature: mockSignature, detail: false },
+    { time: new Date(Date.now() - 3600000).toISOString(), kind: 'faucet', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }, { symbol: 'tSOL', amount: '10000000000', decimals: 9 }], result: 'confirmed', signature: mockSignature, detail: false },
+    { time: new Date(Date.now() - 7200000).toISOString(), kind: 'deposit', assets: [{ symbol: 'tUSDC', amount: '1000000000', decimals: 6 }], result: 'success', signature: run.steps.find((s) => s.label.includes('bob') && s.label.includes('deposit'))?.signatures[0] ?? mockSignature, detail: true },
+  ];
   const swapAssets = [
-    { symbol: 'SOL', decimals: 9, usd: '150', source: 'pyth' },
-    { symbol: 'tSOL', decimals: 9, usd: '100', source: 'mock' },
-    { symbol: 'tUSDC', decimals: 6, usd: '1', source: 'mock' },
-    { symbol: 'pSOL', decimals: 9, usd: '108', source: 'pyth' },
-    { symbol: 'pBTC', decimals: 8, usd: '84400', source: 'pyth' },
-    { symbol: 'pETH', decimals: 8, usd: '2500', source: 'pyth' },
-    { symbol: 'tHYPE', decimals: 8, usd: '80', source: 'mock' },
+    { symbol: 'SOL', mint: null, decimals: 9, usd: '150', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'tSOL', mint: a.mints.tSOL, decimals: 9, usd: '100', source: 'mock', desk_available: '100000000000' },
+    { symbol: 'tUSDC', mint: a.mints.tUSDC, decimals: 6, usd: '1', source: 'mock', desk_available: '100000000000' },
+    { symbol: 'pSOL', mint: devnet.labels.mints.pSOL, decimals: 9, usd: '108', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'pBTC', mint: devnet.labels.mints.pBTC, decimals: 8, usd: '84400', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'pETH', mint: devnet.labels.mints.pETH, decimals: 8, usd: '2500', source: 'pyth', desk_available: '100000000000' },
+    { symbol: 'tHYPE', mint: devnet.labels.mints.tHYPE, decimals: 8, usd: '80', source: 'mock', desk_available: '100000000000' },
   ] as const;
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
@@ -108,16 +113,27 @@ export function installMock() {
     }
     if (url.pathname === '/swap/send') return ok({ signature: mockSignature, status: 'confirmed', error: null, slot: '1', indexed: true });
     if (url.pathname === '/faucet') return ok({ signatures: [], granted: [], next_allowed_at: new Date().toISOString() });
+    if (url.pathname === '/faucet/config') return ok({ quota: { max: 30, remaining: 24, window_hours: 5, resets_at: null } });
     if (!url.pathname.startsWith('/api/')) return real(input, init);
     if (url.pathname === '/api/config') return ok({ faucet_url: 'http://localhost:8788/faucet' });
+    if (/^\/api\/wallet\/[^/]+\/history$/.test(url.pathname)) {
+      const before = url.searchParams.get('before');
+      const wallet = decodeURIComponent(url.pathname.split('/')[3]);
+      return ok(wallet === a.actors.bob && !before ? { items: history, next_before: null } : { items: [], next_before: null });
+    }
     if (url.pathname === '/api/pool') return ok(pool);
     if (url.pathname === '/api/accounts') return ok(accounts);
     if (url.pathname === '/api/activity') {
       const bank = url.searchParams.get('bank');
+      const kind = url.searchParams.get('kind');
       const selected = banks.find((b) => b.address === bank);
-      const filtered = bank ? items.filter((item) => item.bank === bank || item.instruction === 'lending_account_liquidate' && [a.banks.tSOL, a.banks.tUSDC].includes(bank))
-        .map((item) => item.instruction === 'lending_account_liquidate' && selected ? { ...item, bank, bank_label: selected.label } : item) : items;
-      return ok({ items: pendingItem ? [pendingItem, ...filtered] : filtered, next_before: null });
+      const activityItems = pendingItem ? [pendingItem, ...items] : items;
+      const byBank = bank ? activityItems.filter((item) => item.bank === bank || item.instruction === 'lending_account_liquidate' && [a.banks.tSOL, a.banks.tUSDC].includes(bank))
+        .map((item) => item.instruction === 'lending_account_liquidate' && selected ? { ...item, bank, bank_label: selected.label } : item) : activityItems;
+      const byKind = kind === 'supply' ? byBank.filter(item => ['lending_account_deposit', 'lending_account_withdraw'].includes(item.instruction))
+        : kind === 'borrow' ? byBank.filter(item => ['lending_account_borrow', 'lending_account_repay'].includes(item.instruction))
+          : kind === 'liquidate' ? byBank.filter(item => item.instruction === 'lending_account_liquidate') : byBank;
+      return ok({ items: byKind, next_before: null });
     }
     if (url.pathname === '/api/liquidations') {
       const bank = url.searchParams.get('bank');
@@ -144,7 +160,8 @@ export function installMock() {
     if (url.pathname.startsWith('/api/wallet/')) {
       return ok({ wallet: url.pathname.split('/').pop(), sol_lamports: '2500000000', marginfi_account: null, faucet_url: 'http://localhost:8788',
         tokens: banks.map((b) => ({ bank: b.address, mint: b.mint, label: b.label, decimals: b.decimals,
-          amount: ({ tUSDC: '1000000000', tSOL: '10000000000', pSOL: '10000000000', pBTC: '600000', pETH: '20000000', tHYPE: '600000000' } as Record<string, string>)[b.label] ?? '0' })) });
+          amount: ({ tUSDC: '1000000000', tSOL: '10000000000', pSOL: '10000000000', pBTC: '600000', pETH: '20000000', tHYPE: '600000000' } as Record<string, string>)[b.label] ?? '0',
+          has_account: b.label !== 'tHYPE' })) });
     }
     if (url.pathname === '/api/build') {
       // 假交易：一笔 0 lamports 的自转账，只为让钱包有东西可签。
@@ -164,7 +181,7 @@ export function installMock() {
       const bank = banks.find((item) => item.address === submitted?.bank);
       const action = submitted?.action ?? 'deposit';
       pendingItem = { signature, slot: '1', block_time: new Date().toISOString(), ix_index: 0, instruction: `lending_account_${action}`,
-        event: null, account: a.marginfiAccounts.bob, account_label: 'bob', bank: bank?.address ?? null, bank_label: bank?.label ?? null, amount: submitted?.amount ?? null, ok: true };
+        event: null, account: a.marginfiAccounts.bob, account_label: 'bob', authority: a.actors.bob, authority_label: 'bob', bank: bank?.address ?? null, bank_label: bank?.label ?? null, amount: submitted?.amount ?? null, ok: true };
       return ok({ signature, status: 'confirmed', error: null, slot: '1', indexed: true });
     }
     const sig = url.pathname.split('/').pop()!;

@@ -15,7 +15,7 @@ import { send } from '../scenario/lib/rpc';
 import { createContext } from '../scenario/lib/runtime';
 import { fetchAccount } from '../scenario/lib/state';
 import { decodePriceUpdate } from '../src/decoder/pyth';
-import { mockFeedSigner, refreshTimestampIx } from '../src/oracle/mock-write';
+import { refreshTimestampIx } from '../src/oracle/mock-write';
 import { FEED_IDS, pythPushAccount } from '../src/oracle/pyth';
 
 const { BN } = anchor;
@@ -32,7 +32,7 @@ async function main() {
 
   const meta = (b: B): AccountMeta[] => [b.bank, b.oracle].map(pubkey => ({ pubkey, isSigner: false, isWritable: false }));
   // tUSDC 用的是我们的 mock 价格账户:顺手刷新时间戳(D-017 的做法);Pyth 账户由 Pyth 自己保鲜,不能也不需要我们写。
-  const usdcSigner = mockFeedSigner(usdcFeed)!, mocks = (await connection.getAccountInfo(usdcFeed))!.owner;
+  const mocks = (await connection.getAccountInfo(usdcFeed))!.owner;
   const user = async (name: string, fund: { b: B; amount: bigint }) => {
     const wallet = Keypair.generate(), account = Keypair.generate();
     const ata = getAssociatedTokenAddressSync(fund.b.mint, wallet.publicKey);
@@ -48,15 +48,14 @@ async function main() {
   };
   const borrow = async (name: string, u: { wallet: Keypair; account: Keypair }, collateral: B, debt: B, amount: bigint) => {
     const ata = getAssociatedTokenAddressSync(debt.mint, u.wallet.publicKey);
-    const t = BigInt((await connection.getBlockTime(await connection.getSlot()))!);
-    const signature = await send(ctx, `${name}: 借款`, [refreshTimestampIx(mocks, usdcFeed, t),
+    const signature = await send(ctx, `${name}: 借款`, [refreshTimestampIx(mocks, usdcFeed),
       createAssociatedTokenAccountIdempotentInstruction(ctx.admin.publicKey, ata, u.wallet.publicKey, debt.mint),
       await ctx.program.methods.lendingAccountBorrow(new BN(amount.toString())).accountsStrict({
         marginfiGroup: group, marginfiAccount: u.account.publicKey, signer: u.wallet.publicKey, bank: debt.bank,
         destinationTokenAccount: ata, bankLiquidityVaultAuthority: pda(ctx, 'liquidity_vault_auth', debt.bank),
         bankLiquidityVault: pda(ctx, 'liquidity_vault', debt.bank), tokenProgram: TOKEN_PROGRAM_ID })
         // 槽位顺序:先存款的抵押,再新开的负债(find_or_create 用第一个空槽)。
-        .remainingAccounts([...meta(collateral), ...meta(debt)]).instruction()], [u.wallet, usdcSigner]);
+        .remainingAccounts([...meta(collateral), ...meta(debt)]).instruction()], [u.wallet]);
     const got = await connection.getTokenAccountBalance(ata);
     console.log(`${name}: 借到 ${got.value.uiAmountString} ✓  ${signature}`);
   };

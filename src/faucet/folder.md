@@ -1,6 +1,6 @@
 # src/faucet
 
-独立进程的专用钱包仅转已有代币；管理员补充逻辑只供 setup 工具使用。限流在内存中，重启清零。
+专用钱包仅转已有代币；管理员补充逻辑只供 setup 工具使用。限流状态持久化在数据库，使容器与 Vercel 多实例共用相同规则。
 
 | 文件 | 角色 | 功能 |
 |---|---|---|
@@ -12,6 +12,7 @@
 | faucet.test.ts | 测试 | 三种限流、准确转账/ATA、余额不足与 setup 指令、可选 Pyth grant |
 | swap.ts | 兑换 | 原子兑换报价/转发;单价每次报价时由 PriceReader 读取 |
 | prices.ts | 定价 | 价格账户字节 → USD×1e6;Pyth 查校验级别与年龄 |
+| ../store/faucet-reservations.ts | 限流存储 | 事务级 advisory lock 串行预留与窗口名额查询 |
 | swap.test.ts / prices.test.ts | 测试 | 七种资产两两兑换、Pyth feed 取价、随价格变化、过期/零价拒绝 |
 
 SYNC: 修改实现时同步本表、文件头部、README 与 EP8 文档。

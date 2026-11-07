@@ -6,6 +6,8 @@
 
 > 状态:**主线 M0–M5 已完成并在真实 devnet 上验收**(见 [docs/progress.md](docs/progress.md))。视频与分镜([video/](video/))待录制。
 
+**在线体验:<https://solana-lending-market.vercel.app>**(devnet,测试币没有真实价值)。连接 devnet 钱包后可领测试币、存借、兑换。部署方式见 [docs/deploy.md](docs/deploy.md#vercel--supabase-全免费部署),链上地址见 [docs/addresses.md](docs/addresses.md)。
+
 文档同步约定：功能与架构变动同时更新 README、相关 folder.md 和源码 INPUT/OUTPUT/POSITION 注释。
 
 ## 你会得到什么
@@ -14,6 +16,7 @@
 - 一条**手写的解析流水线**:指令(Borsh)、事件(日志)、账户状态(`zero_copy` 布局 + I80F48 定点数),全部带测试,并用 Anchor 官方 coder 交叉校验。
 - **幂等、可回填、可重放**的 Postgres 存储:清库重跑,解码表的 md5 完全一致。
 - 一个**API 和前端**,其中的"交易详情"能并排看到一笔交易的原始字节、解码结果、数据库行。
+- **链上数据页**按存取、借还、清算筛选活动，并汇总账户债务与风险状态。
 - 资产详情页按银行状态变化展示利用率、APR 与总量的阶梯历史曲线;API 保留每次采样 slot,相同账户内容不重复写入。
 - **钱包交互**(可选的第 8 集):连接 devnet 钱包,对借贷池存款、取款、借款、还款;有水龙头、SOL 与测试币任意互换的兑换台(按预言机价格成交),以及端到端验收脚本。价格由交易自动保鲜,不依赖后台进程。
 - **Pyth 实时行情资产**:pSOL、pBTC、pETH 已接入;HYPE 银行使用我们固定为 $80 的价格,由后台定时写入。网页为代币提供图标与说明。
@@ -43,6 +46,8 @@
 `ep8-end` 之后的改进(兑换台、价格自动保鲜与 confirmed 入库、Pyth 定价的 pSOL 银行、界面改版、代币链上元数据)只在 `main` 上,章节里对应位置标为 **「后续增补」**,并写明对应的决策编号;想看这些就用 `main`。
 
 ## 快速开始
+
+所有链上地址(程序、借贷池、各资产的 mint/银行/价格账户、需要补充 SOL 的运维钱包)见 [docs/addresses.md](docs/addresses.md)。
 
 需要 Node 24、pnpm、Docker、Solana CLI 2.1.20。
 

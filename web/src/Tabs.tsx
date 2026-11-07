@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useT } from './i18n';
 
 export type TabId = 'pool' | 'wallet' | 'swap' | 'accounts';
 export const TAB_IDS: TabId[] = ['pool', 'wallet', 'swap', 'accounts'];
@@ -61,6 +62,7 @@ export interface TabDef { id: TabId; label: string; badge?: ReactNode }
 
 /** WAI-ARIA tabs:左右方向键切换,Home/End 到首尾;只有选中的 tab 在 Tab 键顺序里。 */
 export function TabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: TabId; onChange: (id: TabId) => void }) {
+  const { t } = useT();
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const onKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((t) => t.id === active);
@@ -72,7 +74,7 @@ export function TabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: Tab
     refs.current[id]?.focus();
   };
   return (
-    <nav className="tabs" role="tablist" aria-label="页面" onKeyDown={onKey}>
+    <nav className="tabs" role="tablist" aria-label={t.page} onKeyDown={onKey}>
       {tabs.map((t) => (
         <button key={t.id} ref={(el) => { refs.current[t.id] = el; }} role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`}
                 aria-selected={active === t.id} tabIndex={active === t.id ? 0 : -1} className={active === t.id ? 'on' : ''} onClick={() => onChange(t.id)}>

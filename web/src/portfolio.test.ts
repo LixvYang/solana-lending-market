@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AccountView, BankView } from '@contract';
-import { portfolioSummary } from './portfolio';
+import { portfolioSummary, positionSummary, shouldShowGettingStarted, sortByUsdDesc } from './portfolio';
 
 const bank = { address: 'bank', lending_apr: 0.1, borrowing_apr: 0.2, weights: {
   asset_init: 0.8, asset_maint: 0.9, liability_init: 1.1, liability_maint: 1.05,
@@ -12,15 +12,36 @@ const account = (deposit: number, borrow: number): AccountView => ({
   health: { init: 0, maint: 0, assets_usd: deposit, liabilities_usd: borrow }, status: borrow ? 'healthy' : 'no_debt',
 });
 
-test('portfolio summary reports net value, estimated net APY, health factor and used capacity', () => {
+test('portfolio summary reports net value, estimated net APY, health percent and used capacity', () => {
   const result = portfolioSummary(account(100, 20), [bank]);
   assert.equal(result.netAssetsUsd, 80);
   assert.equal(result.netApy, 0.075);
-  assert.equal(result.healthFactor, 90 / 21);
+  assert.ok(Math.abs(result.healthPercent! - (90 - 21) / 90 * 100) < 1e-12);
   assert.equal(result.borrowCapacityUsed, 22 / 80);
 });
 
-test('no debt has no finite health factor and unknown balance prices stay hidden', () => {
-  assert.equal(portfolioSummary(account(100, 0), [bank]).healthFactor, null);
+test('no debt has 100 percent health and unknown balance prices stay hidden', () => {
+  assert.equal(portfolioSummary(account(100, 0), [bank]).healthPercent, 100);
   assert.equal(portfolioSummary({ ...account(10, 0), balances: [{ ...account(10, 0).balances[0], deposit_usd: null }] }, [bank]).netAssetsUsd, null);
+});
+
+test('position summary weights APR by each position dollar value', () => {
+  const second = { ...bank, address: 'second', lending_apr: 0.2 } as BankView;
+  const balances = [
+    { bank: bank.address, label: 'T', deposit: '1', borrow: '0', deposit_usd: 10, borrow_usd: 0 },
+    { bank: second.address, label: 'S', deposit: '1', borrow: '0', deposit_usd: 30, borrow_usd: 0 },
+  ];
+  assert.deepEqual(positionSummary(balances, [bank, second], 'deposit'), { usd: 40, apr: 0.175 });
+  assert.equal(positionSummary(balances, [bank, second], 'borrow'), null);
+});
+
+test('getting started stops after the first deposit but remains for a disconnected wallet', () => {
+  assert.equal(shouldShowGettingStarted(false, false), true);
+  assert.equal(shouldShowGettingStarted(true, false), true);
+  assert.equal(shouldShowGettingStarted(true, true), false);
+});
+
+test('sorts available assets by USD value with unknown values last and stable ties', () => {
+  const values = [{ id: 'a', usd: 2 }, { id: 'b', usd: null }, { id: 'c', usd: 8 }, { id: 'd', usd: 2 }];
+  assert.deepEqual(sortByUsdDesc(values, (item) => item.usd).map((item) => item.id), ['c', 'a', 'd', 'b']);
 });

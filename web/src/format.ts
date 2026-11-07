@@ -14,7 +14,7 @@ const usdCompact = new Intl.NumberFormat('en-US', { style: 'currency', currency:
 export const fmtUsd = (value: number | null) => (value == null ? '—' : Math.abs(value) >= 1e6 ? usdCompact.format(value) : usd.format(value));
 export const fmtPct = (value: number | null, digits = 1) => (value == null ? '—' : `${(value * 100).toFixed(digits)}%`);
 export const short = (address: string | null, n = 4) => (address ? `${address.slice(0, n)}…${address.slice(-n)}` : '—');
-export const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—');
+export const fmtTime = (iso: string | null, locale: 'zh' | 'en' = 'zh') => (iso ? new Date(iso).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', { hour12: false }) : '—');
 // 权重在链上是 I80F48 定点数，0.8 存成 0.79999…；显示时取 3 位小数，别把定点数的舍入噪声摆给读者。
 export const fmtWeight = (w: number) => String(Number(w.toFixed(3)));
 

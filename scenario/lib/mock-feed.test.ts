@@ -32,7 +32,7 @@ test('价格区域：值、时间戳与 slot 落在预期位置', () => {
 
 test('定点数与 write 指令编码', () => {
   assert.equal(toFixed18(0.5), 5n * 10n ** 17n);
-  const ix = writeIx(PublicKey.default, PublicKey.default, 2215, Buffer.from([1, 2, 3]));
+  const ix = writeIx(PublicKey.default, PublicKey.default, 2215, Buffer.from([1, 2, 3]), PublicKey.default);
   assert.equal(ix.data.readBigUInt64LE(8), 2215n);
   assert.equal(ix.data.readUInt32LE(16), 3);
   assert.deepEqual([...ix.data.subarray(20)], [1, 2, 3]);

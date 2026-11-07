@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { fakeClock, fakeRpc, tokenInfo } from '../api/wallet-test-utils';
-import { createSwap, notionalMicro, swapOut, type PricedAsset, type SwapConfig } from './swap';
+import { createSwap, notionalMicro, swapOut, type PricedAsset, type SwapAssetConfig, type SwapConfig } from './swap';
 import { faucetRoute } from './server';
 import type { SwapAsset } from '../api/types';
 
@@ -97,15 +97,29 @@ test('报价的边界:同一资产、未知资产、太小、太大、非法数�
     ['tUSDC', 'SOL', '0.01'], ['tUSDC', 'SOL', '101'], ['SOL', 'tUSDC', '0'], ['SOL', 'tUSDC', 'abc'], ['SOL', 'tUSDC', '-1']])
     await assert.rejects(swap.quote({ wallet, from, to, amount }), (e: unknown) => status(e) === 400, `${from}→${to} ${amount}`);
   await assert.rejects(swap.quote({ wallet: 'not-a-key', from: 'SOL', to: 'tSOL', amount: '0.1' }), (e: unknown) => status(e) === 400);
-  await assert.rejects(swapWith(stocked(1n)).quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503);    // 代币不足
+  await assert.rejects(swapWith(stocked(1n)).quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' }), (e: unknown) => status(e) === 503 && (e as { code?: string }).code === 'DESK_INSUFFICIENT');    // 代币不足
   // SOL 不足:要付出 0.5 SOL,兑换台有 0.52 SOL,但必须保留 0.05(付 ATA 租金等),可用只有 0.47 → 拒绝;
   // 有 0.56 SOL 时可用 0.51 → 放行。正好卡在"保留金额"这条规则上,去掉保留就会放行前一种。
   await assert.rejects(swapWith(stocked(10n ** 15n, 520_000_000)).quote({ wallet, from: 'tUSDC', to: 'SOL', amount: '25' }), (e: unknown) => status(e) === 503);
   assert.equal((await swapWith(stocked(10n ** 15n, 560_000_000)).quote({ wallet, from: 'tUSDC', to: 'SOL', amount: '25' })).out_amount, '500000000');
-  assert.deepEqual(await swap.rates(), { assets: [{ symbol: 'SOL', decimals: 9, usd: '50', source: 'mock' }, { symbol: 'tSOL', decimals: 9, usd: '50', source: 'mock' },
-    { symbol: 'tUSDC', decimals: 6, usd: '1', source: 'mock' }, { symbol: 'pSOL', decimals: 9, usd: '104.708908', source: 'pyth' },
-    { symbol: 'pBTC', decimals: 8, usd: '70000', source: 'pyth' }, { symbol: 'pETH', decimals: 8, usd: '3500', source: 'pyth' },
-    { symbol: 'tHYPE', decimals: 8, usd: '80', source: 'mock' }], min_usd: '0.05', max_usd: '100' });
+  assert.deepEqual(await swap.rates(), { assets: [{ symbol: 'SOL', mint: null, decimals: 9, usd: '50', source: 'mock', desk_available: null }, { symbol: 'tSOL', mint: mint.tSOL.toBase58(), decimals: 9, usd: '50', source: 'mock', desk_available: null },
+    { symbol: 'tUSDC', mint: mint.tUSDC.toBase58(), decimals: 6, usd: '1', source: 'mock', desk_available: null }, { symbol: 'pSOL', mint: mint.pSOL.toBase58(), decimals: 9, usd: '104.708908', source: 'pyth', desk_available: null },
+    { symbol: 'pBTC', mint: mint.pBTC.toBase58(), decimals: 8, usd: '70000', source: 'pyth', desk_available: null }, { symbol: 'pETH', mint: mint.pETH.toBase58(), decimals: 8, usd: '3500', source: 'pyth', desk_available: null },
+    { symbol: 'tHYPE', mint: mint.tHYPE.toBase58(), decimals: 8, usd: '80', source: 'mock', desk_available: null }], min_usd: '0.05', max_usd: '100' });
+});
+
+test('rates 返回兑换台可用库存,SOL 扣除保留量且账户读取只批量一次', async () => {
+  const solAta = Keypair.generate().publicKey, usdcAta = Keypair.generate().publicKey;
+  let batches = 0;
+  const price = Object.assign(async (a: SwapAssetConfig) => config.price(a), { accounts: async (keys: PublicKey[]) => {
+    batches++;
+    assert.deepEqual(keys, [solAta, usdcAta]);
+    return [{ lamports: 560_000_000, data: Buffer.alloc(0) }, tokenInfo(mint.tUSDC, desk.publicKey, 42_000_000n)];
+  } });
+  const swap = createSwap(desk, stocked(), { ...config, assets: [SOL, tUSDC], deskAccounts: { SOL: solAta, tUSDC: usdcAta }, price }, fakeClock());
+  const result = await swap.rates();
+  assert.deepEqual(result.assets.map(asset => asset.desk_available), ['510000000', '42000000']);
+  assert.equal(batches, 1);
 });
 
 test('汇率跟着预言机走:同一个兑换台,价格变了报价就变;读不到价格或价格为 0 时拒绝(503),不按旧价成交', async () => {
@@ -157,6 +171,21 @@ test('转发守卫:用户签完的兑换交易(含 SOL 收款方向)放行;不�
   await assert.rejects(swap.submit({ transaction: Buffer.from(withOtherProgram.serialize()).toString('base64') }), /not a swap transaction/);
 });
 
+test('确认兑换按报价记录钱包、卖出/买入数量;记录失败不改变已确认状态', async () => {
+  const records: unknown[][] = [];
+  const swap = createSwap(desk, stocked(), config, fakeClock(), async (...args) => { records.push(args); });
+  const quote = await swap.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  const signed = VersionedTransaction.deserialize(Buffer.from(quote.transaction, 'base64')); signed.sign([user]);
+  const sent = await swap.submit({ transaction: Buffer.from(signed.serialize()).toString('base64') });
+  assert.equal(sent.status, 'confirmed'); assert.deepEqual(records[0], [sent.signature, user.publicKey.toBase58(),
+    { symbol: 'SOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '25000000', decimals: 6 }]);
+
+  const broken = createSwap(desk, stocked(), config, fakeClock(), async () => { throw Error('db unavailable'); });
+  const second = await broken.quote({ wallet: user.publicKey.toBase58(), from: 'SOL', to: 'tUSDC', amount: '0.5' });
+  const secondTx = VersionedTransaction.deserialize(Buffer.from(second.transaction, 'base64')); secondTx.sign([user]);
+  assert.equal((await broken.submit({ transaction: Buffer.from(secondTx.serialize()).toString('base64') })).status, 'confirmed');
+});
+
 test('HTTP 路由:只有配置了兑换台才有 /swap/*,否则 404', async () => {
   const noGrant = async () => { throw new Error('unused'); };
   assert.equal((await faucetRoute('GET', '/swap/rates', undefined, '1.1.1.1', noGrant as never)).status, 404);
@@ -180,8 +209,27 @@ test('单个资产价格不可用时，汇率表照常返回其他资产，只�
   const swap = createSwap(desk, stocked(), stale, fakeClock());
   const rates = await swap.rates();
   assert.equal(rates.assets.find(a => a.symbol === 'tUSDC')?.usd, '1');
-  assert.deepEqual(rates.assets.find(a => a.symbol === 'tHYPE'), { symbol: 'tHYPE', decimals: 8, usd: null, source: null, unavailable: '价格暂时不可用，请稍后再试。' });
+  assert.deepEqual(rates.assets.find(a => a.symbol === 'tHYPE'), { symbol: 'tHYPE', mint: mint.tHYPE.toBase58(), decimals: 8, usd: null, source: null, unavailable: '价格暂时不可用，请稍后再试。', desk_available: null });
   const wallet = user.publicKey.toBase58();
   assert.equal((await swap.quote({ wallet, from: 'SOL', to: 'tUSDC', amount: '0.5' })).out_amount, '25000000');
   await assert.rejects(swap.quote({ wallet, from: 'SOL', to: 'tHYPE', amount: '0.5' }));
+});
+
+// 报价放在内存里时，兑换台在报价与提交之间重启、或云上多实例(报价落 A、提交落 B)就会漏记。
+// 改为从提交上来的交易本身解析两侧转账：不需要内存状态，也不调用 RPC。
+test('报价与提交落在不同的兑换台实例上，仍按交易本身记录两侧数量(SOL↔代币、代币↔代币)', async () => {
+  for (const [from, to, amount, expected] of [
+    ['SOL', 'tUSDC', '0.5', [{ symbol: 'SOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '25000000', decimals: 6 }]],
+    ['pSOL', 'tUSDC', '0.5', [{ symbol: 'pSOL', amount: '500000000', decimals: 9 }, { symbol: 'tUSDC', amount: '52354454', decimals: 6 }]],
+    ['tUSDC', 'SOL', '25', [{ symbol: 'tUSDC', amount: '25000000', decimals: 6 }, { symbol: 'SOL', amount: '500000000', decimals: 9 }]],
+  ] as const) {
+    const quoting = createSwap(desk, stocked(), config, fakeClock());
+    const records: unknown[][] = [];
+    const submitting = createSwap(desk, stocked(), config, fakeClock(), async (...args) => { records.push(args); });
+    const quote = await quoting.quote({ wallet: user.publicKey.toBase58(), from, to, amount });
+    const signed = VersionedTransaction.deserialize(Buffer.from(quote.transaction, 'base64')); signed.sign([user]);
+    const sent = await submitting.submit({ transaction: Buffer.from(signed.serialize()).toString('base64') });
+    assert.equal(sent.status, 'confirmed');
+    assert.deepEqual(records[0], [sent.signature, user.publicKey.toBase58(), ...expected], `${from}→${to}`);
+  }
 });

@@ -3,14 +3,17 @@ import 'dotenv/config';
 import { pgDb } from '../src/store/db';
 import { getPool } from '../src/api/queries';
 import { hostAddress, portNumber } from '../src/api/server';
-import { faucetGrants, dailyLimit } from '../src/faucet/config';
+import { faucetGrants, windowHours, windowMax, minimumSol } from '../src/faucet/config';
 import { createFaucet } from '../src/faucet/service';
 import { createFaucetServer } from '../src/faucet/server';
 import { createSwap, type SwapAssetConfig } from '../src/faucet/swap';
 import { oraclePrices } from '../src/faucet/prices';
 import { FEED_IDS, pythPushAccount } from '../src/oracle/pyth';
 import { nativeAmount } from '../src/faucet/config';
+import { insertDeskEvent } from '../src/store/desk-events';
+import { createFaucetReservations } from '../src/store/faucet-reservations';
 import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { serviceKeypair, cliRpc } from './admin-runtime';
 async function main() {
   const args = process.argv.slice(2);
@@ -26,11 +29,15 @@ async function main() {
   const tokens = banks.filter(b => ['tSOL', 'tUSDC', 'tHYPE', 'pSOL', 'pBTC', 'pETH'].includes(b.label) && b.oracle_feed);
   const assets: SwapAssetConfig[] = [{ symbol: 'SOL', decimals: 9 },
     ...tokens.map(b => ({ symbol: b.label as SwapAssetConfig['symbol'], decimals: b.decimals, mint: new PublicKey(b.mint) }))];
+  const deskAccounts = Object.fromEntries(assets.map(asset => [asset.symbol, asset.mint ? getAssociatedTokenAddressSync(asset.mint, payer.publicKey) : payer.publicKey]));
   const oracles = { SOL: pythPushAccount(FEED_IDS['SOL/USD']), ...Object.fromEntries(tokens.map(b => [b.label, new PublicKey(b.oracle_feed!)])) };
-  const swap = createSwap(payer, rpc, { assets, price: oraclePrices(rpc, oracles),
-    minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') });
-  const server = createFaucetServer(createFaucet(payer, rpc, grants, dailyLimit(process.env.FAUCET_DAILY_MAX)), swap,
-    async () => { await db.query('SELECT 1'); });
+  const swap = createSwap(payer, rpc, { assets, deskAccounts, price: oraclePrices(rpc, oracles, undefined, Object.values(deskAccounts)),
+    minUsdMicro: usd('SWAP_MIN_USD', '0.05'), maxUsdMicro: usd('SWAP_MAX_USD', '100') }, undefined,
+    (signature, wallet, from, to) => insertDeskEvent(db, { signature, wallet, kind: 'swap', from, to, status: 'confirmed' }));
+  const reservations = createFaucetReservations(db);
+  const server = createFaucetServer(createFaucet(payer, rpc, grants, windowHours(process.env.FAUCET_WINDOW_HOURS), windowMax(process.env.FAUCET_WINDOW_MAX), minimumSol(process.env.FAUCET_MIN_SOL), undefined,
+    (signature, wallet, details) => insertDeskEvent(db, { signature, wallet, kind: 'faucet', details, status: 'confirmed' }), reservations), swap,
+    async () => { await db.query('SELECT 1'); }, proxyHops(process.env.TRUST_PROXY_HOPS));
   server.on('error', () => { console.error('faucet server failed'); void db.close(); process.exitCode = 1; });
   const host = hostAddress();
   const port = portNumber(process.env.PORT ?? process.env.FAUCET_PORT ?? '8788');
@@ -38,3 +45,8 @@ async function main() {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => server.close(() => { void db.close(); }));
 }
 void main().catch(() => { console.error('faucet startup failed; check configuration'); process.exitCode = 1; });
+function proxyHops(value: string | undefined) {
+  if (value === undefined) return 0;
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw Error('invalid TRUST_PROXY_HOPS');
+  return Number(value);
+}

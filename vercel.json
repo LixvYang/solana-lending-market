@@ -1,6 +1,26 @@
 {
   "framework": "vite",
-  "installCommand": "pnpm --dir web install --frozen-lockfile",
+  "installCommand": "pnpm install --frozen-lockfile && pnpm --dir web install --frozen-lockfile",
   "buildCommand": "pnpm --dir web build",
-  "outputDirectory": "web/dist"
+  "outputDirectory": "web/dist",
+  "functions": {
+    "api/main.ts": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/main?__path=:path*"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/sync",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "regions": [
+    "bom1"
+  ]
 }

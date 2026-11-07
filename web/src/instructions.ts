@@ -4,24 +4,26 @@
  */
 export type IxKind = 'supply' | 'borrow' | 'risk' | 'admin';
 
-const NAMES: Record<string, [string, IxKind]> = {
-  lending_account_deposit: ['存款', 'supply'],
-  lending_account_withdraw: ['取款', 'supply'],
-  lending_account_borrow: ['借款', 'borrow'],
-  lending_account_repay: ['还款', 'borrow'],
-  lending_account_liquidate: ['清算', 'risk'],
-  marginfi_account_initialize: ['开户', 'admin'],
-  marginfi_group_initialize: ['创建借贷组', 'admin'],
-  marginfi_group_configure: ['配置借贷组', 'admin'],
-  lending_pool_add_bank: ['上架资产', 'admin'],
-  lending_pool_add_bank_with_seed: ['上架资产', 'admin'],
-  lending_pool_configure_bank: ['调整资产参数', 'admin'],
-  lending_pool_configure_bank_oracle: ['设置价格源', 'admin'],
-  lending_pool_accrue_bank_interest: ['计息', 'admin'],
-  lending_pool_collect_bank_fees: ['收取协议费', 'admin'],
+import type { Translation } from './i18n';
+
+const NAMES: Record<string, [keyof Translation, IxKind]> = {
+  lending_account_deposit: ['operationSupply', 'supply'],
+  lending_account_withdraw: ['operationWithdraw', 'supply'],
+  lending_account_borrow: ['operationBorrow', 'borrow'],
+  lending_account_repay: ['operationRepay', 'borrow'],
+  lending_account_liquidate: ['operationLiquidator', 'risk'],
+  marginfi_account_initialize: ['instructionOpenAccount', 'admin'],
+  marginfi_group_initialize: ['instructionCreateGroup', 'admin'],
+  marginfi_group_configure: ['instructionConfigureGroup', 'admin'],
+  lending_pool_add_bank: ['instructionListAsset', 'admin'],
+  lending_pool_add_bank_with_seed: ['instructionListAsset', 'admin'],
+  lending_pool_configure_bank: ['instructionConfigureAsset', 'admin'],
+  lending_pool_configure_bank_oracle: ['instructionSetOracle', 'admin'],
+  lending_pool_accrue_bank_interest: ['instructionAccrueInterest', 'admin'],
+  lending_pool_collect_bank_fees: ['instructionCollectFees', 'admin'],
 };
 
-export const ixLabel = (name: string): { label: string; kind: IxKind } => {
+export const ixLabel = (name: string, t: Translation): { label: string; kind: IxKind } => {
   const hit = NAMES[name];
-  return hit ? { label: hit[0], kind: hit[1] } : { label: name, kind: 'admin' };
+  return hit ? { label: t[hit[0]] as string, kind: hit[1] } : { label: name, kind: 'admin' };
 };

@@ -5,6 +5,7 @@ import { label, unixIso, type BankData, type GroupData, type State } from './sta
 import type { BankView, InterestCurve, PoolView } from './types';
 import { marginfiIdl } from '../decoder/idl';
 import { oracleAccountOf } from '../oracle/pyth';
+import { riskPrice } from './oracle-price';
 const number = (v: Parameters<typeof fixedRational>[0]) => displayNumber(fixedRational(v));
 export function interestCurve(bank: BankData, group: GroupData): InterestCurve {
   const c = bank.config.interest_rate_config, cache = group.fee_state_cache;
@@ -34,6 +35,8 @@ export function bankView(address: string, bank: BankData, state: State): BankVie
     price_updated_at: price === null ? null : unixIso(feed!.last_update_timestamp), oracle_feed, oracle_source: feed?.source ?? null,
     total_deposits: String(floor(deposit)), total_borrows: String(floor(borrow)),
     total_deposits_usd: usd(deposit, decimals, price), total_borrows_usd: usd(borrow, decimals, price), utilization: u, ...rates(u, curve),
+    // 前端风险预览要与程序同价(资产取下沿、债务取上沿),否则 Pyth 资产多时会以为还能借(D-019、2026-10-23)。
+    risk_price: price === null ? null : { init: riskPrice(feed!, 'init'), maint: riskPrice(feed!, 'maint') },
     weights: { asset_init: number(c.asset_weight_init), asset_maint: number(c.asset_weight_maint), liability_init: number(c.liability_weight_init), liability_maint: number(c.liability_weight_maint) }, curve,
     asset_share_value: toDecimal(Uint8Array.from(bank.asset_share_value.value)), liability_share_value: toDecimal(Uint8Array.from(bank.liability_share_value.value)), last_accrual_at: unixIso(bank.last_update) };
 }

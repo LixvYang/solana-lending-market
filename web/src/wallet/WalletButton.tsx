@@ -7,15 +7,13 @@
  */
 import { BaseWalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
-
-const labels = {
-  'change-wallet': '更换钱包', connecting: '连接中…', 'copy-address': '复制地址', copied: '已复制',
-  disconnect: '断开连接', 'has-wallet': '连接钱包', 'no-wallet': '连接钱包',
-};
+import { useT } from '../i18n';
 
 export function WalletButton() {
+  const { t } = useT();
   const { connected, connecting, publicKey } = useWallet();
-  const text = connecting ? '连接中…' : connected && publicKey ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}` : '连接钱包';
+  const labels = { 'change-wallet': t.walletChange, connecting: t.connecting, 'copy-address': t.copyAddress, copied: t.copied, disconnect: t.disconnect, 'has-wallet': t.connectWallet, 'no-wallet': t.connectWallet };
+  const text = connecting ? t.connecting : connected && publicKey ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}` : t.connectWallet;
   return <BaseWalletMultiButton labels={labels}>
     <><svg className="wallet-button-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2" /><path d="M2.5 7.5h15M13 11h2" /></svg><span>{text}</span></>
   </BaseWalletMultiButton>;

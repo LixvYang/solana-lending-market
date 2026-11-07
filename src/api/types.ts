@@ -54,6 +54,8 @@ export interface BankView {
   lending_apr: number;
   borrowing_apr: number;
   weights: BankWeights;
+  /** 程序算健康度时用的价格区间(开仓用 EMA、维持用实时价;资产取 low、债务取 high)。mock 价时 low = high。无价格时为 null。 */
+  risk_price: { init: { low: number; high: number }; maint: { low: number; high: number } } | null;
   curve: InterestCurve;
   /** I80F48 精确十进制字符串。 */
   asset_share_value: string;
@@ -140,6 +142,9 @@ export interface ActivityItem {
   event: string | null;
   account: string | null;
   account_label: string | null;
+  /** 拥有 account 的 Solana 钱包(事件头 marginfi_account_authority);无事件时为 null。 */
+  authority: string | null;
+  authority_label: string | null;
   /** 清算取被清算资产所在的 bank(asset_bank)。 */
   bank: string | null;
   bank_label: string | null;
@@ -153,6 +158,18 @@ export interface ActivityPage {
   /** 下一页的游标(传回 before)；没有更多则为 null。 */
   next_before: string | null;
 }
+
+export type WalletHistoryKind = 'deposit' | 'borrow' | 'repay' | 'withdraw' | 'liquidated' | 'liquidator' | 'swap' | 'faucet';
+export interface WalletHistoryLeg { symbol: string; amount: string; decimals: number }
+export interface WalletHistoryItem {
+  time: string | null;
+  kind: WalletHistoryKind;
+  assets: WalletHistoryLeg[];
+  result: 'success' | 'failed' | (string & {});
+  signature: string;
+  detail: boolean;
+}
+export interface WalletHistoryPage { items: WalletHistoryItem[]; next_before: string | null }
 
 /** GET /api/liquidations:清算事件里的原生单位 f64 差值与健康度。 */
 export interface LiquidationItem {
@@ -290,6 +307,8 @@ export interface WalletTokenView {
   decimals: number;
   /** 钱包里的数量，原生单位。 */
   amount: string;
+  /** ATA 是否存在;余额为 0 不代表账户不存在。 */
+  has_account: boolean;
 }
 
 export interface WalletView {
@@ -308,6 +327,8 @@ export interface FaucetResponse {
   granted: { label: string; amount: string }[];
   next_allowed_at: string;
 }
+export interface FaucetQuotaView { max: number; remaining: number; window_hours: number; resets_at: string | null }
+export interface FaucetConfigView { quota: FaucetQuotaView }
 
 /* ───────────────────────── 兑换(SOL 与池子资产任意两两互换) ─────────────────────────
  * 测试币是自己发行的,没有真实的 AMM 池子。兑换台是按预言机报价的"原子兑换":一笔交易里同时
@@ -318,12 +339,15 @@ export type SwapAsset = 'SOL' | 'tSOL' | 'tUSDC' | 'pSOL' | 'pBTC' | 'pETH' | 't
 
 export interface SwapAssetView {
   symbol: SwapAsset;
+  mint: string | null;
   decimals: number;
   /** 单价(USD),十进制字符串;报价当时从价格账户读取。价格暂不可用(如 Pyth 断更)时为 null。 */
   usd: string | null;
   source: OracleSource | null;
   /** usd 为 null 时的原因;其他资产照常报价。 */
   unavailable?: string;
+  /** 兑换台可用数量(原生单位);SOL 已扣除保留余额。 */
+  desk_available: string | null;
 }
 
 export interface SwapRatesView {

@@ -41,6 +41,6 @@ export class TestWalletAdapter extends BaseMessageSignerWalletAdapter {
   }
   async signMessage(_message: Uint8Array): Promise<Uint8Array> {
     // 测试钱包只用于签交易；web3.js 不导出 ed25519 消息签名，这里明确报错而不是假装成功。
-    throw new Error('Test Wallet 不支持 signMessage');
+    throw new Error('Test Wallet does not support signMessage');
   }
 }

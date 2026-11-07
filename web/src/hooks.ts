@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
  */
 export function usePoll<T>(load: () => Promise<T>, deps: unknown[], everyMs = 5000) {
   const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -26,7 +26,7 @@ export function usePoll<T>(load: () => Promise<T>, deps: unknown[], everyMs = 50
         if (serialized !== last) { last = serialized; setData(next); }
         setError(null);
         setUpdatedAt(new Date());
-      } catch (e) { if (alive) setError(e instanceof Error ? e.message : String(e)); }
+      } catch (e) { if (alive) setError(e); }
     };
     void run();
     const timer = setInterval(run, everyMs);

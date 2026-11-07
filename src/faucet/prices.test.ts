@@ -65,6 +65,21 @@ test('新增 Pyth 资产按各自 symbol 读取配置的价格账户', async () 
   assert.deepEqual(readKeys, Object.values(accounts).map(a => a.toBase58()));
 });
 
+test('价格与兑换台库存账户共用同一批 RPC 读取', async () => {
+  const priceKey = Keypair.generate().publicKey, deskKey = Keypair.generate().publicKey;
+  let calls = 0;
+  const read = oraclePrices({ getMultipleAccountsInfo: async (keys: PublicKey[]) => {
+    calls++;
+    assert.deepEqual(keys, [priceKey, deskKey]);
+    return keys.map(key => key.equals(priceKey)
+      ? { data: pull(50), owner: Keypair.generate().publicKey, lamports: 1 }
+      : { data: Buffer.alloc(0), owner: Keypair.generate().publicKey, lamports: 5 });
+  } } as never, { SOL: priceKey }, () => 9_999_999_999_000, [deskKey]);
+  assert.equal((await read({ symbol: 'SOL', decimals: 9 })).usdMicro, 50_000_000n);
+  assert.equal((await read.accounts!([deskKey]))[0]?.lamports, 5);
+  assert.equal(calls, 1);
+});
+
 test('tHYPE 从 mocks 拥有的 Switchboard 布局账户读取固定 $80', async () => {
   const hype = Keypair.generate().publicKey;
   const read = oraclePrices({ getMultipleAccountsInfo: async (keys: PublicKey[]) => keys.map(key => key.equals(hype) ? { data: pull(80), owner: Keypair.generate().publicKey } : null) } as never,

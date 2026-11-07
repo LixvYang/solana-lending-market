@@ -465,3 +465,442 @@ Claude 在浏览器(浅色、深色、390 宽)逐页审查 T14 后的结论。�
 - 修复：兑换结果的 toast 只给"在 Explorer 查看";借贷交易保留"交易详情"。抽屉遇到 404 显示"借贷市场里没有这笔交易的记录"。已核对兑换不会触发"同步中"(兑换页不走 `reportResult`)。
 - 验证(隔离浏览器上下文，用完即关):测试钱包真实兑换 0.005 SOL,toast 为"交易已确认 | 在 Explorer 查看",无"同步中"。
 - 另：结束了 10/14 启动、工作目录已随改名移走的旧 Vite(pid 41327/41368,端口 5173)。
+
+### T16 钱包历史记录 — done(分支 `feat/wallet-history`)
+
+作者要求：可以看到"我的钱包"过去的行为。
+
+**数据来源(不额外消耗 RPC):**
+- 借贷行为(存款、借款、还款、取款、清算——包括作为被清算方)来自现有 `instructions`/`events`:筛选 authority 为该钱包的 marginfi 账户相关的指令;清算按 `liquidatee_marginfi_account` 也要能查到(被清算的人要看到自己被清算)。
+- 兑换与领取测试币**不经过 marginfi,索引器不收录**。由兑换台在处理成功时记录：新表 `desk_events`(迁移 `src/store/migrations/005_*.sql` 或下一个序号，幂等):`signature` 主键、`wallet`、`kind`(`swap` / `faucet`)、卖出/买入的资产与原生数量、`created_at`、`status`。兑换台 `/swap/send` 确认后写入一行;水龙头发放成功后写入一行。写入失败不影响用户的交易结果(交易已上链),只记日志。
+- **不要**用 `getSignaturesForAddress(钱包)`:每次查看都耗 Helius 额度，且会混入与本市场无关的交易。
+
+**接口:** `GET /api/wallet/:address/history?before=<游标>&limit=20`,把两类按时间倒序合并、统一形状:时间、类型(deposit/borrow/repay/withdraw/liquidated/liquidator/swap/faucet)、资产与数量(兑换给出卖出→买入两侧)、结果、签名、是否可打开"交易详情"(仅借贷类)。游标分页，与 `/api/activity` 一致。
+
+**界面:** "我的仓位"页底部"历史记录"列表(钱包已连接且有记录时显示;无记录时一行"还没有记录")。每行：时间(12px,slate-11)、操作名(存入/借出/还款/取出/被清算/清算/兑换/领取)、资产图标 + 数量(兑换显示"0.1 SOL → 0.1 pSOL")、结果、链接(借贷类给"交易详情",兑换/领取只给 Explorer)。"加载更多"分页。遵守 T14 的设计规范(字号 12/14/24、0.5px 边框、Radix 颜色、不加说明文字、无中点)。刚发出的交易出现前沿用"同步中"机制，不另做。`web/src/mock.ts` 同步假数据。
+
+**测试:** 迁移幂等;兑换/领取成功写一行、失败不写、写入失败不影响返回;历史接口合并排序与分页;被清算方能看到自己的清算;其他钱包的记录不会出现(按 authority 隔离)。
+
+**验收(Claude):** 真实 devnet 上用测试钱包做一次兑换、领取、存款，历史里按时间出现三条，链接正确。
+
+### T16 审查(2026-10-23)— 通过(Claude 修了四处)
+
+- **清算数量带小数**:清算事件余额是 f64,差值如 `475000000.00000095`,前端按整数原生单位格式化会出错。取整;新增测试(修复前失败)。
+- **混入其他池子**:剧本账户由固定种子派生，每次重跑剧本都在新池子留下记录，历史接口没按 `POOL_GROUP` 过滤(`/api/activity` 有),bob 的历史里出现未登记的银行地址。加上与 activity 相同的 group 条件;新增测试(修复前失败);真实数据核对 bob 历史=剧本四步(存 100 tSOL、借 5000 tUSDC、被清算没收 10 tSOL 代还 475 tUSDC、还款),按每页 2 条翻页拼接与一次取全一致。
+- **兑换数量放大 10⁹ 倍**:查询 `desk_events` 的 SQL 漏选 `from_decimals`/`to_decimals`,小数位回落为 0,0.005 SOL 显示成 5,000,000 SOL。补列;测试补小数位断言(修复前失败)。
+- **pSOL 图标消失**:代币图标的渐变 id 按"符号 + 尺寸"命名，同页重复 6 次且第一个在隐藏的 tab 里,Chrome 让其余引用失效，只剩角标。改用 `useId()` 保证每个实例唯一;复查页面 50 个渐变 id 无重复。
+- **真实 devnet 验收**(隔离浏览器上下文，用完即关):测试钱包依次兑换 0.005 SOL → pSOL、领取测试币、存入 50 tUSDC(首次建账户),历史按时间倒序出现三条，借贷类有"交易详情",兑换/领取为 Explorer。
+- 验收途中遇到页面空白：开发服务器的依赖预构建缓存过期(`504 Outdated Optimize Dep`),与代码无关;已在 5173 以 `--force` 重启 Vite。
+
+### T16 追加：兑换记录改为解析交易本身(2026-10-23,作者同意)
+
+- 原实现把报价意图放在兑换台内存(`quoted` Map,上限 200 条),提交时按消息体查找。弱点：兑换台在报价与提交之间重启，或云上多实例(报价落 A、提交落 B)时，交易成功但历史漏记。
+- 改为 `swapLegs`:从用户提交的交易字节里解码 System 转账与 SPL Token `Transfer`,SPL 的 mint 用"钱包 + mint"在本地算 ATA 比对;用户→兑换台为卖出，兑换台→用户为买入。**不调用 RPC**,删除内存状态。数量可信：消息体带兑换台签名。
+- 测试：报价实例与提交实例分开(模拟重启/多实例),覆盖 SOL→代币、代币→代币、代币→SOL;修复前失败。
+- 真实 devnet:报价 → 重启兑换台 → 测试钱包签名提交，交易确认，`desk_events` 记下 0.003 SOL → 0.31274 tUSDC(SOL ≈ $104.25)。
+
+### 缺陷：额度已用完，界面仍显示"最多可借 2.1189",模拟才失败(2026-10-23,作者账户 J6ND…)
+
+- 取证：该账户约 $3,100 Pyth 资产(pSOL/pETH/pBTC)、借 2271 tUSDC。API(与程序同算法)开仓健康度 $0.34;前端按中间价算出约 $2.3,于是"最多可借 2.1189",链上模拟失败。
+- 根因：前端风险预览只用中间价，程序用价格区间(开仓 EMA、维持实时价;资产取下沿、债务取上沿;半宽 Pyth conf × 2.12,上限 5%,D-019)。T2 时已记为"Pyth 资产预览略偏乐观",小仓位时可忽略，大仓位时偏差超过剩余额度。
+- 修复:`/api/pool` 每个银行加 `risk_price`(调用 API 已有的 `riskPrice`,开仓/维持各一组 low/high);`web/src/risk.ts` 资产按 low、债务按 high、各口径用各自区间，最多可借按开仓 high 折算。新增测试(修复前失败：中间价 800 vs 程序 784)。
+- 核对：用真实 API 数据跑前端 `risk.ts`,开仓 $0.1885、维持 $424.6706,与 API 完全一致;最多可借 0.1713 tUSDC;借 2.1 在按钮处即被拦下("超过可借额度")。
+- 作者疑问"额度没了为什么健康因子还有数":两者口径不同。健康因子(维持口径)1.18 表示离清算还远(维持健康度 $425);能否再借看开仓口径，已用完。另：再借 2.1 时健康因子 1.1797 → 1.1786,两位小数都是 1.18,看似没算;改为前后两位相同时显示三位小数。
+
+### T17 健康度改为 0–100%;图表悬停显示时间与数值 — done(图表部分由 T18 用 Recharts 重做)
+
+**1. 健康度(作者要求)**
+- 公式改为 marginfi 官方前端的写法：**健康度 = (维持加权资产 − 维持加权债务) ÷ 维持加权资产**。只有存款时 100%;≤ 0% 可被清算。加权用 `risk_price` 的维持区间(资产 low、债务 high),与程序一致。替换原来的"健康因子 = 资产 ÷ 债务"(∞ / 小于 1 可清算)。
+- 在 `web/src/risk.ts` 增加这个百分比(保留原有加权和字段);没有任何资产也没有债务时为 null(显示"—")。
+- 显示：一位小数百分比，例如"15.2%"。颜色:≥ 30% 绿(green-11)、10–30% 琥珀(amber-11)、< 10% 红(red-11);≤ 0% 红色并显示"可清算"。前后两值一位小数相同但实际不同时显示两位小数(沿用 T 之前的思路)。
+- 替换位置：资产页操作面板的风险预览("健康度 15.2% → 15.1%")、"我的仓位"指标卡、"链上数据 → 清算监控"列表(原显示 USD 差值，改为百分比，按账户余额 + `risk_price` 在前端计算;状态文字保持)。
+- 清算记录表：事件只给 USD 差值，算不出百分比，保留 USD,列名"健康度差值(USD)"。
+- 所有界面文字"健康因子"改为"健康度"。
+
+**2. 图表悬停(作者要求)**
+- 资产页"历史曲线":鼠标移动时显示竖线并吸附到最近的变化点，高亮该点;提示框显示具体时间(`YYYY/MM/DD HH:mm`)与数值(利用率/APR 为百分比，两位小数;总量为代币数量与美元值)。鼠标离开时隐藏。触屏点按同样生效。
+- 横轴均匀标 4–5 个时间刻度(原来只有首尾)。
+- 利率曲线：确认悬停显示利用率与对应存款/借款 APR;没有就补上，交互与历史曲线一致。
+- 提示框是浮层，可以用阴影(T14 规则:浮层阴影 `0 8px 24px`);字号只用 12/14;颜色用 Radix 变量;无动画。
+
+**测试**:`risk.ts` 健康度百分比(无债务 100%、刚好清算线 0%、负值、无资产无债务 null);用 T 前的真实数据形状核对：维持加权资产 2813.3、债务 2384.8 → 15.2%。图表悬停由 Claude 在浏览器验收。
+
+### T18 图表改用 Recharts — done
+
+作者建议用常见的现成图表组件，不再手写 SVG。手写版的悬停定位、提示框宽度、纵轴截断都得逐个补(T17 审查里修了三处),成熟库默认处理好。取舍：项目已从"教学索引器"转为可用产品(D-023、D-025),依赖换稳定的交互，值得。
+
+**选型(Claude 已定):`recharts@3.10.1`**(2026-07-25 发布，精确版本，加入 `web/package.json`)。理由：一套库同时画两张图——历史曲线(横轴时间、阶梯线 `type="stepAfter"`)与利率曲线(横轴利用率、"最优/当前"参考线 `ReferenceLine`);内置 Tooltip/十字线/自适应宽度;React 组件写法与项目一致。未选 lightweight-charts(横轴只能是时间，画不了利率曲线，会变成两套方案)、ECharts(体积大、命令式)。
+
+**配色(Claude 已用 dataviz 校验脚本验证，不要改):**
+- 新增图表色 token:`--chart-borrow` = blue-9(浅/深色都用);`--chart-deposit` = 浅色 orange-10(`#ef5f00`)、深色 orange-8(`#a35829`)。浅色 orange-9 对卡片底色对比度 2.83 < 3(警告),深色 orange-9 亮度超出合格带(失败);以上替换后两种模式校验全部通过。
+- 利用率等单系列用 `--chart-borrow`。网格线 slate-6、轴文字 slate-11 12px;参考线"最优"用 slate-8 虚线，"当前"用对应系列色的点。
+
+**要做:**
+1. 用 Recharts 重写 `web/src/market/BankHistory.tsx`(利用率 / APR / 总量三种模式不变)与 `web/src/RateCurve.tsx`,删除手写的坐标换算、悬停与提示框代码及其样式。
+2. 规格:线宽 2px;悬停高亮点直径 ≥ 8px、带 2px 底色描边;只画水平网格线;**关闭动画**(`isAnimationActive={false}`,T14 规则 7);图内文字只用 12px;`ResponsiveContainer` 自适应，390px 窄屏不溢出。
+3. 悬停提示：自定义 Tooltip 内容，沿用 T17 的信息(时间 `YYYY/MM/DD HH:mm`;利用率/APR 两位小数百分比;总量为代币数量 + 美元值),样式用现有 `.tip`(浮层阴影、Radix 颜色)。利率曲线提示：利用率 + 存款/借款 APR。
+4. 横轴：历史曲线按真实时间比例(数值型时间轴),4–5 个刻度 `MM/DD HH:mm`;利率曲线 0–100%。纵轴：历史"总量"用紧凑金额($20K),百分比模式按数据取整上限(T 之前的 niceTop 思路)。
+5. 两条以上系列显示图例(与现在一致);两张图都保留"查看数据表"的表格视图(可访问性与对比度兜底)。
+6. 依赖固定版本，`pnpm install` 更新 `web/pnpm-lock.yaml`;CI 用 `--frozen-lockfile`,锁文件必须提交。
+7. 验收：两处 typecheck、全量测试;在自述里给出构建产物 gzip 体积前后对比(Claude 测得改前约 220 kB)。浏览器视觉与悬停由 Claude 验收。
+
+### T18 审查(2026-10-23)— 通过(Claude 补装依赖并修了四处)
+
+- Codex 沙箱连不上 npm,没装上 Recharts、没更新锁文件、没能跑 web typecheck 与构建。Claude 安装并提交 `web/pnpm-lock.yaml`,typecheck 通过。
+- **体积**:引入 Recharts 后主包 gzip 219 → 326 kB(+49%),而图表只在资产页出现。改为 `React.lazy` 懒加载两张图：主包 217 kB(比改前还小，手写图表代码也拆出去了),图表块约 111 kB 仅在打开资产页时下载。
+- **懒加载失败会整页空白**:没有错误边界时，图表文件下载失败(网络抖动、或用户停留期间站点重新部署)会卸载整个 React 树。新增 `ChunkBoundary`,只把图表位置换成"图表加载失败 · 重新加载"。实测(开发服务器装依赖前的解析失败)确实触发了这个场景。
+- **图表全空白(致命)**:Codex 加了 `.recharts-wrapper { max-width: 100% }`。Recharts 3 的 `ResponsiveContainer` 外面套着一层宽度为 0 的测量容器，`max-width` 按 0 计算，整张图宽度为 0、什么都不显示(开发与生产构建都是)。删除该规则并加注释。Claude 一度误判为"开发模式预构建问题",用生产构建对照后排除。
+- **弱化坐标轴**:按 dataviz 规范，去掉纵轴轴线与刻度线，只留水平网格。
+- **配色**:dataviz 校验脚本实测——浅色 orange-9 对比度 2.83(警告)、深色 orange-9 亮度出带(失败);改用浅色 orange-10、深色 orange-8,两种模式全部通过。
+- **浏览器验收**:浅色 1280、深色 390。两张图渲染;历史曲线悬停显示时间与数值、提示框贴近悬停点且在视口内;利率曲线悬停显示利用率与存借 APR,"最优"参考线可见;390 宽无横向溢出。
+
+### T19 界面中英双语(i18n)— done
+
+作者要求界面支持中文和英文，英文术语参考主流借贷产品(Aave、Morpho、marginfi)。本任务覆盖本节与公共规则冲突处:"界面文字用中文"改为"界面文字全部经 i18n 字典"。
+
+**方案(Claude 已定):**
+1. **不加依赖**,自写类型安全字典(约 250 条，用 react-i18next 不划算)。`web/src/i18n/zh.ts` 为基准;`en.ts` 类型声明为 `typeof zh` 的同键结构，缺键或多键编译失败。带参数的条目写成函数(`borrowMax: (n: string) => \`最多可借 ${n}\``),不做字符串模板解析。
+2. `web/src/i18n/index.tsx`:`LocaleProvider` + `useT()` 返回当前字典与 `locale`。初始语言：本地存储 `lang`(try/catch 包裹)→ 浏览器 `navigator.languages` 以 `zh` 开头则中文 → 否则英文。切换时写回本地存储并设置 `document.documentElement.lang`(`zh-CN` / `en`)。
+3. 切换入口：页头右侧一个按钮，显示另一种语言("EN" / "中文"),点一下切换。不做下拉。
+4. 格式化:`fmtTime` 按当前语言(`zh-CN` / `en-US`,24 小时制);图表刻度和提示框里的时间维持数字格式(`MM/DD HH:mm`、`YYYY/MM/DD HH:mm`),两种语言通用。金额、数量、百分比格式不变。
+5. **API 文案与语言解耦**(改后端):
+   - `ApiError` 增加稳定的机器码 `code`(如 `PRICE_UNAVAILABLE`、`DESK_INSUFFICIENT`、`FAUCET_EMPTY`、`TRANSFER_TIMEOUT`、`TRANSFER_FAILED`、`NO_PRICE_SOURCE`…),响应体为 `{ error, code, params? }`(`params` 如 `{ symbol }`);`error` 保留中文作为兜底。前端按 `code` 查字典，查不到显示 `error`。
+   - 程序错误已有 `name`(`RiskEngineInitRejected` 等),前端按 `name` 翻译，`message` 作兜底。
+   - `wallet-history` 的 `result: '成功'|'失败'` 改为语言无关的值(`'success' | 'failed' | 其他状态原值`),前端翻译;同步 `src/api/types.ts`、`web/src/mock.ts` 与测试。
+   - 兑换报价的 `summary` 中文句子：前端改用已有字段自行拼出，不再显示 `summary`(字段可保留)。
+6. 范围：仅 `web/src` 界面文字(含 `aria-label`、`title`、占位符、空状态、提示、图例、表头、toast)。页面 `<title>` 随语言切换("借贷市场" / "Lending Market")。教程与 `docs/` 不翻译。代码注释保持中文。
+7. 中文文案逐字保持现状(不借机改词)。
+
+**英文术语表(必须遵守):**
+
+| 中文 | English | 中文 | English |
+|---|---|---|---|
+| 市场 | Markets | 我的仓位 | Dashboard |
+| 兑换 | Swap | 链上数据 | Explorer |
+| 存款(动作) | Supply | 已存款 / 我的存款 | Supplied / Your supplies |
+| 借款(动作) | Borrow | 已借款 / 我的借款 | Borrowed / Your borrows |
+| 还款 | Repay | 取款 | Withdraw |
+| 债务 | Debt | 抵押 | Collateral |
+| 健康度 | Health factor | 可清算 | Liquidatable |
+| 总存款 / 总借款 | Total supplied / Total borrowed | 可用流动性 | Available liquidity |
+| 存款 APR / 借款 APR | Supply APR / Borrow APR | 利用率 | Utilization |
+| 最大 LTV / 抵押率 | Max LTV | 清算线 | Liquidation threshold |
+| 借款权重 | Borrow weight | 净值 | Net worth |
+| 最多可借 | Available to borrow | 借款额度已用 | Borrow power used |
+| 利率模型 | Interest rate model | 最优 | Optimal |
+| 历史曲线 | History | 查看数据表 | Show data table |
+| 流水 | Activity | 清算记录 | Liquidations |
+| 连接钱包 | Connect wallet | 领取测试代币 | Get test tokens |
+| 交易详情 | Transaction details | 同步中 | Syncing |
+| 预言机 | Oracle | 银行(marginfi bank) | Bank |
+
+表里没有的词按 Aave 英文界面的写法;句子用简洁的产品语气(句首大写，按钮不加句号)。
+
+**测试:**
+- 字典键一致性:`en` 与 `zh` 键集合相同，所有值非空(函数条目用样例参数调用后非空)。
+- **防遗漏扫描测试**:扫描 `web/src/**/*.{ts,tsx}`(排除 `i18n/`、`*.test.*`、`mock.ts`),去掉注释后不得含中日韩字符字面量。这是长期守卫，后续新增文案也会被它拦下。
+- 后端：错误响应含 `code`;`wallet-history` 结果值改动的现有测试同步更新。
+
+**验收**:两处 typecheck、全量测试。浏览器中英切换、390px 英文长词不溢出由 Claude 验收。
+
+### T19 审查(2026-10-24)— 通过(Claude 修了三处)
+
+- **服务端提示被吞**:Codex 把不含中文的 `ApiError` 文案一律替换成"请求暂时无法完成",前端再把 `API_ERROR` 映射成同一句。"deposit first to create account"、输入校验等有用提示因此丢失。改为原样返回 `message`;只有未知内部错误(`INTERNAL_ERROR`)用固定文案。
+- **窄屏英文页头溢出**(390px 实测):"Connect wallet" 换成两行、文字溢出按钮;连上钱包后地址按钮压住产品名。窄屏页头改为只显示图标与 Devnet 标记，产品名保留给读屏;按钮与标题不换行。
+- **英文数量标签换行**:"Borrow amount" 在操作面板里折行。英文改为 "Amount"(与 Aave 一致，所选标签页已说明动作)。
+- **浏览器验收**:英文 390px 下市场、资产页、借款面板、我的仓位、兑换、链上数据均无中文残留、无横向溢出;切到中文后 `lang=zh-CN`、标题"借贷市场",刷新后保持;中文文案与改前一致。防遗漏扫描测试已在全量测试中。
+
+### T20 水龙头按时段限量、可信代理 IP、钱包余额告警 — done
+
+背景：准备公开部署并在 B 站教学。水龙头钱包(`2UpA…zQNr`)每次给新用户领取，要为最多 6 种代币各建一个代币账户，租金约 0.00204 SOL/个，**新用户每次约 0.0123 SOL**;3.47 SOL 只够约 280 人。作者要求按时段限量("比如 5 小时最多多少人"),让测试能持续更久;SOL 由作者从自己的 devnet 钱包补充。
+
+**要做:**
+1. **时段限量替换每日上限**(`src/faucet/limit.ts`、`service.ts`、`scripts/faucet.ts`):
+   - 新环境变量 `FAUCET_WINDOW_HOURS`(默认 5)与 `FAUCET_WINDOW_MAX`(默认 30):任意连续 `FAUCET_WINDOW_HOURS` 小时内，全站成功预留不超过 `FAUCET_WINDOW_MAX` 次(滑动窗口，记录每次预留时间)。删除 `FAUCET_DAILY_MAX` / `dailyMax`(同步 `.env.example`、`docs/deploy.md`)。
+   - 默认值理由(写进注释):30 次 × 0.0123 SOL ≈ 0.37 SOL / 5 小时，最坏约 1.8 SOL/天。
+   - 窗口满时返回 429,错误码 `FAUCET_WINDOW_FULL`,`params: { next }`(最早一条记录滑出窗口的 ISO 时间);与单钱包/单 IP 的 `FAUCET_LIMIT` 区分。前端两种语言给出"本时段名额已领完，{本地时间} 后恢复" / "This period's quota is used up. Available again at {time}"。
+   - 钱包 10 分钟、IP 每小时 5 次的现有规则保留。
+   - 限流状态仍在内存(重启清零),在注释里如实写明。
+2. **领取名额可见**:`GET /faucet/config`(若无则在现有水龙头配置响应里)增加 `quota: { max, remaining, window_hours, resets_at }`;前端"领取测试代币"处显示"本时段剩余 N 份"(中英)。同步 `src/api/types.ts` 与 `web/src/mock.ts`。
+3. **可信代理 IP**(`src/faucet/server.ts`):新环境变量 `TRUST_PROXY_HOPS`(默认 0)。0 时只用 socket 地址(现状);N>0 时取 `X-Forwarded-For` 从右数第 N 个地址(平台代理追加的那一跳),格式不合法则退回 socket 地址。注释说明为什么不能直接信最左边的地址(客户端可伪造)。`docs/deploy.md` 的 Railway/容器平台步骤写明设为 1。
+4. **余额告警**:
+   - 水龙头：领取前查付款钱包 SOL 余额;低于 `FAUCET_MIN_SOL`(默认 0.2)时返回 503 `FAUCET_EMPTY`(兑换台还要付手续费，不能把 SOL 用光);低于 1 SOL 时每小时最多打印一次警告日志(含钱包公钥与余额，不含密钥)。
+   - keeper:每轮写价后查自身余额，低于 0.02 SOL 时打印警告(同样限频)。余额查询要复用已有 RPC 调用或每轮最多 1 次，不能明显增加 RPC 用量(T11 的预算)。
+   - `/healthz` 不因余额低而失败(避免平台反复重启),只记日志。
+5. 中英字典同步新增文案;防遗漏扫描测试必须继续通过。
+
+**测试**:滑动窗口(窗口内满额拒绝、最早一条滑出后放行、`next` 时间正确、与钱包/IP 限制叠加取最晚);`TRUST_PROXY_HOPS` 0/1/2、伪造的最左地址被忽略、非法地址退回 socket;余额低于阈值拒绝、告警限频;quota 计算。
+
+**验收**:根目录 `pnpm typecheck && pnpm test`、`(cd web && pnpm typecheck)`。真实领取与界面由 Claude 验收。
+
+### T20 审查(2026-10-24)— 通过(Claude 修了三处)
+
+- **英文时间格式错**:恢复时间按 `<html lang>` 格式化，但切换语言的那次渲染里它还是旧值，英文界面显示中文日期。改为字典按自身语言格式化。
+- **名额为 0 时不提示恢复时间**:原来只显示"剩余 0 份",要点了才知道几点恢复。改为直接显示"本时段名额已领完，… 后恢复"。英文单复数修正(1 claim / N claims)。
+- **部署文档写反**:"用户付 ATA 创建租金"——领取时实际是水龙头钱包付。已改正并写明每人成本与默认限量下的日耗。
+- **实测**(临时 `FAUCET_WINDOW_MAX=1`):第一次真实领取成功、名额 1→0;第二个钱包返回 `FAUCET_WINDOW_FULL` 与恢复时间;界面中英文均显示恢复时间。验收后恢复默认 5 小时 30 份。
+- 已知限制(如实保留):限额在内存，重启清零、多副本不共享——水龙头必须单实例部署。
+
+### T21 Vercel + Supabase 全免费部署 — done
+
+作者决定：前端与后端都部署在 **Vercel(Hobby,免费)**,数据库用 **Supabase 免费版**,不用自有 VPS,不付费。Vercel 只能跑按请求执行的函数，Hobby 定时任务最多每天一次，所以两个常驻进程要改造。**现有容器部署(`SERVICE=api|faucet|keeper|ingest`、docker compose)必须保持可用**,本任务是新增一条部署路径。
+
+**Claude 已确认的事实(不用再查):**
+- 价格维护(keeper)在 Vercel 上**不部署**:借款/取款交易会在用户自己的交易里刷新 mock 价格(`src/api/builder/index.ts` 的 `ep8-price-refresh`);兑换台读 mock 价格只看数值不看年龄(`src/faucet/prices.ts` `usdMicroOf`);Pyth 价格由 Pyth 推送。
+- `/api/send` 确认后已立即索引该笔交易(`src/api/send.ts` 的 `index`)。
+- 依赖 `@vercel/functions@3.9.11` 已由 Claude 安装并提交(提供 `waitUntil`)。不要再加其他依赖。
+
+**要做:**
+1. **函数入口**:仓库根目录 `api/[...path].ts`(Vercel Node 运行时)一个函数承接全部后端:
+   - `/api/desk/*` → 水龙头/兑换台(去掉 `/api/desk` 前缀后交给现有 `faucetRoute` 逻辑);其余 `/api/*` → 现有 API `route`。前后端同源，前端 `VITE_API_BASE` 留空，`FAUCET_URL=/api/desk/faucet`(确认前端 `chain.faucet`/`deskBase`/`apiUrl` 对相对路径工作正常，必要时修)。
+   - 复用 `handle`/`handleFaucet` 的请求解析、错误映射与安全约束(64KB 限制、不回显异常);Vercel 的 req/res 兼容 Node `IncomingMessage`/`ServerResponse`。
+   - 模块级缓存 `pgDb()` 与 RPC 连接(同一实例的多次调用复用);`PG_POOL_MAX` 在 Vercel 上建议 1。
+   - Vercel 上**不执行迁移**(会话级 advisory lock 不适用 Supabase 事务池);只检查迁移齐全，迁移由维护者在本地对 Session 连接串运行 `scripts/migrate.ts`。
+   - 确认所有查询不依赖会话状态(命名 prepared statement、`SET`、会话级锁),因为生产连接走 Supabase **Transaction pooler**。
+2. **按需同步(替代 `ingest --follow`)**:新增迁移 006,建一张租约/状态表(或扩展 `ingest_cursor`),记录 `last_sync_at`、`last_snapshot_at`、`lease_until`。
+   - 每个 API 请求在响应后用 `waitUntil` 触发 `maybeSync`:若距 `last_sync_at` ≥ 30 秒，以一条原子 `UPDATE … WHERE lease_until < now() RETURNING` 抢 60 秒租约，抢到才执行一次 `followOnce`(含 `syncStored` 与 `finalizeSweep`),`lastSnapshotAt` 从表里读写，结束释放租约并更新时间。抢不到直接返回。
+   - 失败只记日志(不含 RPC URL),不影响请求。
+   - 本地/容器模式不启用(只在 Vercel 入口调用)。
+3. **每日定时**:`vercel.json` 增加 `crons`:每天一次调用 `/api/cron/sync`,校验 `Authorization: Bearer ${CRON_SECRET}`,执行一次 `maybeSync`(兼作 Supabase 7 天无活动暂停的保活)。
+4. **水龙头限流改存数据库**(Vercel 多实例不共享内存):迁移 006 增加领取预留表(wallet、ip、at)。预留在一个事务里用 `pg_advisory_xact_lock(<常量>)` 串行化后计数并插入，规则与 T20 完全相同(钱包 10 分钟、IP 每小时 5 次、全站 `FAUCET_WINDOW_HOURS` 内 `FAUCET_WINDOW_MAX` 次;失败也占名额)。`quota()` 也从表计算。保留纯函数 `reserve` 作为规则的单一来源(数据库层只负责取数和写入),旧数据定期按窗口清理。容器模式也改用数据库实现(单一实现，不留两套)。
+5. **CDN 缓存公共只读接口**:对与用户无关的 GET(`/api/pool`、`/api/accounts`、`/api/activity`、银行历史、利率曲线、`/api/config`、`/api/desk/swap/rates`、`/api/desk/faucet/config` 等)加 `Cache-Control: public, s-maxage=5, stale-while-revalidate=10`;`/api/wallet/*`、钱包历史、所有 POST、错误响应不缓存。目的是轮询不耗尽 Hobby 的函数调用额度。
+6. **构建配置**:根 `vercel.json` 安装命令同时装根目录与 `web/` 依赖;函数 `maxDuration` 设 60(发送交易最多等 60 秒确认);`regions` 留注释说明应与 Supabase 区域就近(不写死)。确认 `api/` 目录与 IDL JSON 等相对导入能被 Vercel 打包(写明假设，Claude 会用 `vercel build` 验证)。
+7. **文档**:`docs/deploy.md` 新增"Vercel + Supabase(全免费)"一节：环境变量表(`DATABASE_URL` 用 Transaction pooler、`RPC_URL`、`POOL_GROUP`、`FAUCET_SECRET_KEY`、`FAUCET_URL=/api/desk/faucet`、`CRON_SECRET`、`TRUST_PROXY_HOPS`(Vercel 的取值写明依据或标"待验证")、`FAUCET_WINDOW_*`)、迁移与数据导入步骤(本地 `pg_dump` → Supabase Session 连接串 `pg_restore`)、没有 keeper 的影响、按需同步的行为(无人访问时数据不更新，有访问时最多旧约 30 秒)。`docs/decisions.md` 新增 D-028 记录取舍。
+
+**测试**:租约(并发两次只一个执行、过期可重抢、未到 30 秒不执行)、`lastSnapshotAt` 读写;数据库限流与 T20 规则一致(用 PGlite)、并发预留不超额;路由分发(`/api/desk/*` 与 `/api/*`)、缓存头(公共 GET 有、钱包/POST/错误没有);cron 鉴权。
+
+**验收**:与 CI 相同的检查全部通过。真实 Vercel 预览部署与 Supabase 联调由 Claude 完成。
+
+### T21 审查与上线(2026-10-24)— 通过(Claude 修了六处，均为真实部署才暴露的问题)
+
+- **多段路径 404**:非 Next.js 项目里 `api/[...path].ts` 只匹配一段(`^/api/([^/]+)$`),`/api/wallet/<key>`、`/api/desk/*`、`/api/cron/sync` 全部 404。改为 `api/main.ts` + `vercel.json` rewrite(`/api/:path*` → `/api/main?__path=…`),入口还原原始 URL。
+- **兑换台 404**:`faucetRoute` 拿含查询串的 URL 精确比较，改写附带的参数让它全部落空。改为只比较路径。
+- **CLI 部署会上传 `.env` 和 `pgdata/`**:Vercel 默认忽略列表不含它们(这次因文件数超 15000 被拒才发现)。新增白名单式 `.vercelignore`。
+- **`ERR_REQUIRE_ESM`**:`rpc-websockets@9.3.9` 用 `require` 加载纯 ESM 的 `uuid@14`,Vercel 的模块加载器不支持。`pnpm.overrides` 固定 `rpc-websockets@9.3.8`(依赖 `uuid@11`,带 CommonJS)。
+- **anchor 默认导入为 undefined**:Vercel 编译成 CommonJS 后 `import anchor from` 取不到；本地 tsx(原生 ESM)又认不出 `BN` 命名导出。`builder/instructions.ts` 改为 `default ?? 模块本身`。本地用 `tsc --module commonjs` 编译后 `require` 模拟验证。
+- **函数区域**:Supabase 在孟买(ap-south-1),`regions: ["bom1"]`。
+- **数据迁移**:本地 `pg_dump` → Supabase Session 连接串 `pg_restore`(单事务),8 张表行数逐一相等;再执行迁移 006。
+- **预览实测**:全部公共接口、钱包余额、兑换台名额/汇率 200;`/api/pool` 第二次命中 CDN(`x-vercel-cache: HIT`);按需同步写入 `vercel_sync_state` 并新增快照。
+
+### T22 存款绿、借款黄：统一配色与页面细节 — done
+
+作者要求存款(lend/supply)APR 用绿色、借款(borrow)用黄色，并适当优化其他页面。参考：Aave 储备页实测 Supply APR 线为绿 `rgb(0,189,104)`、Borrow APR 为橙 `rgb(255,112,41)`、利用率为紫——"存款绿、借款暖色"是主流惯例。
+
+**现状问题(Claude 浏览器实测)**:同一含义在不同页面颜色不一致——市场表存款 APR 为 green-12(几乎看不出绿)、借款 APR 无色;链上数据"借出/还款"标签为蓝;图表借款线为蓝、存款线为橙;我的仓位列表 APR 为灰字。
+
+**配色(Claude 已用 dataviz 校验脚本与 WCAG 对比度验证，不要改数值):**
+
+在 `styles.css` 的 `:root` 定义语义 token,并按现有方式为深色模式(`@media (prefers-color-scheme: dark)` 加 `:root:not([data-theme="light"])` 守卫、以及 `:root[data-theme="dark"]`)重定义:
+
+| token | 浅色 | 深色 | 用途 |
+|---|---|---|---|
+| `--supply` | `color-mix(in srgb, var(--green-11) 85%, var(--green-12))` | `var(--green-11)` | 存款相关数字/文字(对比度浅色 ≥4.8:1,深色 9.4:1) |
+| `--borrow` | `color-mix(in srgb, var(--amber-11) 85%, var(--amber-12))` | `var(--amber-11)` | 借款相关数字/文字(浅色 ≥4.8:1,深色 11.5:1) |
+| `--supply-bg` / `--borrow-bg` | `var(--green-3)` / `var(--amber-3)` | 同(Radix 深色 3 阶) | 标签底色 |
+| `--supply-line` | `var(--green-9)` | `var(--green-9)` | 图表存款线 |
+| `--borrow-line` | `var(--amber-11)` | `color-mix(in srgb, var(--amber-9) 50%, var(--amber-7))` | 图表借款线(浅/深色均通过亮度带、饱和度、色盲区分、≥3:1 对比全部检查) |
+| `--chart-util` | `var(--blue-9)` | `var(--blue-9)` | 利用率等单系列线 |
+
+删除 `--chart-borrow` / `--chart-deposit`,所有引用改用上表 token。
+
+**要做:**
+1. **APR 着色**:所有"存款 APR"数值用 `--supply`,所有"借款 APR"数值用 `--borrow`,包括：市场表两列(去掉现有 `.apr.good` 的 green-12 写法)、资产页顶部 KPI 的两格数值、操作面板里的 APR 行、我的仓位"可存资产/可借资产"列表的 APR 副标题、利率曲线与历史曲线的图例数值(若有)。0% 也着色(颜色表示身份，不表示好坏)。
+2. **图表**:历史曲线 APR 模式与总量模式、利率曲线：存款系列 `--supply-line`、借款系列 `--borrow-line`;利用率用 `--chart-util`。提示框里的色块跟随线色，文字保持正文色(`--ink`),不用系列色。
+3. **操作标签**:链上数据与钱包历史里，存入/取出用 `--supply` 文字 + `--supply-bg`;借出/还款用 `--borrow` + `--borrow-bg`;清算保持红色;开户、兑换、领取保持中性。
+4. **我的仓位**:"我的存款/我的借款"每行副标题现在写"存款/借款",与卡片标题重复——改为该资产的 APR(如 `0.01% 存款 APR`,带颜色),与可存/可借列表一致。
+5. **布局细节**:
+   - 市场页与我的仓位顶部 4 张统计卡等宽(现在第一张明显更宽)。
+   - 钱包历史记录：结果列与链接列用固定列宽对齐(现在"交易详情"与"Explorer ↗"宽度不同，导致"成功"左右错位)。
+   - 链上数据表：代币列(图标 + 符号)与同行其他单元格垂直居中对齐(现在偏上)。
+6. **健康度状态色保持不变**(好/警告/危险仍为绿/琥珀/红),但它们必须始终带文字(数值与"可清算"等),不靠颜色单独表达。
+7. 中英文、深浅色、390px 都要正常;遵守 T14 设计规范(Radix 色、0.5px 边框、字号 ≤3 种、无左侧色条)。
+
+**验收**:与 CI 相同的检查通过;浏览器视觉由 Claude 验收(浅/深色、中英文、1280 与 390 宽)。
+
+### T22 审查(2026-10-26)— 通过(Claude 修了两处)
+
+- **图例文字被染成系列色**:Recharts 默认把图例文字染成线色，违反"文字用正文色、颜色只放色块"。改用 `formatter` 输出正文色。
+- **利率摘要丢空格、标点混用**:摘要是 `inline-flex` 容器的直接子项，flex 吞掉了元素间空格("借款4.8%");逗号写死英文。该项改为普通行内排版，分隔符按语言(`，` / `, `)。
+- **浏览器验收**:浅色 1280(市场、资产页 APR 图与利率曲线、我的仓位、链上数据)与深色 390 英文(资产页)。存款数值/标签绿、借款黄，线色与 token 一致;四张统计卡等宽(260px);钱包历史结果列对齐;无横向溢出。
+
+### T23 兑换页参考 Jupiter / Uniswap 精简 — done
+
+作者要求参考 Jupiter、Uniswap 优化兑换页。Claude 实测两家(2026-10-27):主体只有"卖出/买入"两块与主按钮;估值紧贴金额下方;汇率、费用等细节**默认收成一行**(Jupiter:`Rate 1 SOL = 100.19 USDC ⇄ ⌄`),点开才展开;没有额外卡片标题。
+
+**现状问题(本地截图):** 卡片标题"兑换"与页签重复;明细 5 行常驻展开;单价 6 位小数(`SOL $100.156955`);"首次收到某代币另付 0.00204 SOL 账户租金"每次都显示;单笔限额常驻;Pyth 标志孤立在面板右下角，不挨着估值;"买入(预估)"措辞重复(已有 ≈)。
+
+**要做:**
+1. **去掉卡片标题**"兑换"(页签已说明)。
+2. **估值行**:`$5.01` / `≈ $5.01` 紧贴金额下方，Pyth 标志(`SourceChip`)放在估值右侧(与 T 市场表一致),不再单独占面板右下角;mock 资产不标。
+3. **"买入(预估)"改为"买入"**,金额前的 ≈ 已表达预估(英文 `Buy`)。
+4. **明细折叠**:报价出来后只显示一行 `1 SOL ≈ 1 pSOL ⇄`(可切换方向，保持现有行为)+ 右侧网络费 `≈ 0.000005 SOL` + 展开箭头;点开后显示：单价(按价格量级取 2–4 位有效小数，用现有 fmtUsd)、滑点(无，报价时锁定)、成交方式("兑换台按预言机价格成交")、兑换台可用数量(见第 6 条)、单笔限额。未输入金额时不显示明细行。展开状态用 `<details>` 或按钮 + `aria-expanded`,无动画或 250ms ease-out。
+5. **按需提示**:
+   - 账户租金只在用户**还没有**目标代币账户时显示(钱包代币列表里没有该 mint 即视为没有;SOL 不需要),放进折叠行的网络费旁("+ 0.00204 SOL 开户")。
+   - 单笔限额只在金额越界时通过主按钮文案提示(现有 `minTrade`/`maxTrade`),展开明细里保留一行。
+6. **兑换台库存**:`SwapRatesView.assets[]` 增加 `desk_available`(原生单位字符串;SOL 为扣除保留后的可用量)。在**同一次** `getMultipleAccountsInfo` 批量读取里一并读兑换台 ATA 与 SOL 余额(价格账户已在批量读取并缓存 15 秒),不新增 RPC 调用次数。前端在输入的买入数量超过库存时，主按钮提示"兑换台 X 不足"(复用 `apiDeskInsufficient` 文案),不必等报价接口报错。同步 `src/api/types.ts`、`web/src/mock.ts` 与测试。
+7. **币种选择按钮**:把 `▾` 字符换成与钱包按钮一致描边风格的 SVG 下拉箭头(12px)。
+8. 中英文、深浅色、390px;遵守 T14 规范(Radix 色、0.5px 边框、字号 ≤3 种)。
+
+**测试**:`desk_available` 读取与批量调用次数不变(用现有假 RPC 计数);库存不足判断;明细折叠渲染(若现有测试结构允许)。
+
+**验收**:与 CI 相同的检查;浏览器视觉与真实报价由 Claude 验收。
+
+### T23 审查(2026-10-27)— 通过(Claude 修了两处)
+
+- **库存未知被当作 0**:没配置兑换台账户时 `desk_available` 为 `'0'`,前端会把所有兑换判为库存不足。改为 `null`(未知),前端不拦截，交给报价接口按链上余额判断;补测试。
+- **Pyth 标志仍在面板右下角**:移到估值文字后面(占位符是不换行空格 U+00A0,字符串替换匹配不到，按正则改)。
+- **浏览器验收**:浅色 1280 中文(收起/展开明细、单价两位小数、兑换台库存格式化)、新钱包显示"+ 0.00204 SOL 开户"而已有账户的钱包不显示、深色 390 英文无溢出;本地真实兑换 0.05 SOL → pSOL 链上确认。
+- 全量测试一次出现 1 个失败、重跑 278 项全过，属 D-013 的 PGlite 偶发崩溃。
+
+### T24 我的仓位参考 Aave / Morpho 优化 — done
+
+作者要求参考 Aave、Morpho 优化"我的仓位"。参考布局：Aave Dashboard 顶部净资产/净 APY/健康因子;左"我的存款 + 可存资产"、右"我的借款 + 可借资产";每张卡片标题行带汇总(余额、APY、已用借款额度);列表是带列标题的表格。Morpho 仓位用一根条同时画当前 LTV 与清算线，直观显示离清算多远。(Aave 仓位页需连钱包，本次未能实测，按其公开布局。)
+
+**现状问题:** 引导卡在已存款后仍占顶部;存款/借款卡片标题无汇总;列表无列标题、APR 挤在副标题;钱包余额为 0 的资产与有余额的混排;健康度只有百分比;债务数量用红色(红色是"危险"状态色，不该用于普通债务)。
+
+**要做:**
+1. **引导卡**:只在首次存款前显示(连接钱包、领 SOL、领测试币、存入抵押 4 步);借款是可选，有存款后不再显示引导。未连接钱包时照旧显示。
+2. **健康度卡加清算距离条(参考 Morpho)**:条的填充 = `1 − 健康度`(维持口径的债务/资产占比),右端 100% 即清算线(画一条竖线标记);填充色按现有健康状态(好/警告/危险),数值与"可清算"等文字照旧。无债务时条为空、显示 100%。"已用借款额度"卡保留现有条。
+3. **卡片标题行汇总(参考 Aave)**,用空格分隔的"标签 值"对，不用"·":
+   - 我的存款：余额 `$X`、APR(按美元加权，`--supply` 色)。
+   - 我的借款：余额 `$X`、APR(加权，`--borrow` 色)、已用借款额度 `z%`。
+   - 无仓位时不显示汇总。
+4. **列表改为带列标题的表格**(桌面):
+   - 我的存款：资产 | 存款(数量 + 美元) | 存款 APR | 操作
+   - 我的借款：资产 | 债务(数量 + 美元) | 借款 APR | 操作
+   - 可存资产：资产 | 钱包余额 | 存款 APR | 操作
+   - 可借资产：资产 | 最多可借 | 借款 APR | 操作
+   APR 独立成列并按 T22 着色;副标题不再放 APR。≤640px 退回现有两行卡片式排版(APR 回到副标题)。
+5. **排序与弱化**:可存资产按钱包余额美元值降序;可借资产按最多可借美元值降序;数量为 0 的行整行降为次要色(`--ink-2`),按钮仍可点(进入资产页)。不加"显示 0 余额"开关(避免多一个决策点)。
+6. **债务数量去掉红色与 "−" 号**,用正文色;危险只由健康度表达。
+7. 中英文、深浅色、390px;T14 规范。
+
+**测试**:加权 APR 与引导显示条件的纯函数测试(放 `portfolio.ts`);排序规则测试。
+
+**验收**:与 CI 相同的检查;浏览器(有存款无借款、有借款、未连接三种状态)由 Claude 验收。
+
+### T24 审查(2026-10-27)— 通过(Claude 修了两处)
+
+- **首次派发卡死**:Codex 启动时请求超时，之后 49 分钟只在"等待网络重连",零改动。停止后台任务后重派正常。
+- **操作按钮掉到第二行**:新表格规则 `.portfolio-table li`(4 列)与后面的通用 `.asset-list li`(3 列)优先级相同且写在前面，被覆盖。选择器改为 `.asset-list.portfolio-table li`。
+- **表头与数据列错位约 35px**:表头和每行是各自的网格，`auto` 列宽算得不同。改为固定列宽，实测各列右边界逐一相等。
+- **浏览器验收**:未连接(4 步引导)、模拟数据未存款(引导停在第 4 步、可借提示先存抵押)、有存款无借款(引导隐藏、标题汇总、按钱包美元值排序)、有借款(bob 在 devnet 借 0.1 pSOL:健康度 79%、清算距离条 21%、借款汇总 APR 8.57% 与已用额度 22%,验收后已全额还款);深色 390 英文退回两行卡片、无溢出。
+
+### T25 链上数据页参考 Solscan 等浏览器优化 — done
+
+作者要求参考其他网站优化"链上数据"页。参考 Solscan(程序页顶部 Overview 卡 + Program Analytics 按成功/失败分开计数)与 Solscan/Etherscan 的交易表通行做法：相对时间("3 分钟前",悬停看绝对时间)、表格上方按类型筛选、只把失败交易标出来。
+
+**现状问题(本地截图):**
+- 链上活动：每行都有"成功"标签(零信息);数量无美元价值;无类型筛选;绝对时间。
+- 清算监控:22 个账户里 13 个没有任何仓位，整行"—";账户名与短地址重复显示两次;存款里多个代币挤在一起无间距;没有把高风险账户排前面;健康度只有数字。
+
+**要做:**
+1. **顶部概览卡**(参考 Solscan Overview,4 张等宽，复用 `.kpis` 样式),全部从现有 `/api/accounts` 与 `/api/pool` 在前端计算，不加接口:有仓位账户数、有债务账户数、总债务(USD)、最低健康度(带账户名;无债务时"—")。
+2. **链上活动表**:
+   - **类型筛选**:表格上方一个分段控件：全部 | 存取 | 借还 | 清算。后端 `/api/activity` 增加可选参数 `kind=supply|borrow|liquidate`(supply=deposit/withdraw,borrow=borrow/repay,liquidate=liquidate),与现有 `bank`、分页游标可组合;非法值 400。前端切换时重置分页。同步 `web/src/mock.ts` 与测试。
+   - **时间**:相对时间(中英文："刚刚/3 分钟前/2 小时前/3 天前",超过 7 天显示日期),`title` 给完整时间;用一个纯函数实现并测试。
+   - **结果列删除**:成功不显示任何标记;失败的行在操作标签旁加红色"失败"小标签(`--critical` 文字 + red-3 底)。
+   - **数量列加美元**:第二行次要色 `≈ $X`(按当前价格估算，用 `≈` 表明不是成交时价格);清算等无数量的行仍为"—"。
+3. **账户风险表**(原"清算监控",改名为"账户风险" / "Account risk"):
+   - 默认隐藏没有任何存款和债务的账户，表尾一行次要色"另有 N 个空账户"可点击展开(用按钮，`aria-expanded`)。
+   - 排序：可清算 → 健康度低到高 → 无债务;同组内按存款美元值降序。
+   - 账户列：有标签(alice 等)显示标签 + 下一行短地址;无标签只显示一次短地址，不再重复。
+   - 代币小组件之间加 8px 间距(修复挤在一起)。
+   - 健康度列：数值下方加一根细条(复用 T24 的清算距离条样式，宽 64px)。
+   - 状态标签与健康度阈值一致：无债务(中性)、健康(≥30%,绿)、有风险(10–30%,琥珀)、可清算(≤0 或 <10%,红);标签始终带文字。
+4. 中英文、深浅色、390px(表格在窄屏可横向滚动其容器，页面本身不溢出);T14 规范。
+
+**测试**:`kind` 过滤(含与 `bank` 组合、非法值)、相对时间函数、账户排序与空账户过滤纯函数。
+
+**验收**:与 CI 相同的检查;浏览器(中英、深浅、1280/390)由 Claude 验收。
+
+### T25 审查(2026-10-27)— 通过(Claude 修了四处，其中一处是任务说明本身的错误)
+
+- **"可清算"阈值错(说明写错，Codex 照做)**:说明把健康度 <10% 也归为"可清算",但只有 ≤0 才真的能被清算。5% 的账户被标"可清算"会误导。改为四档：≤0 可清算(红)、0–10% 高风险(红)、10–30% 有风险(琥珀)、≥30% 健康(绿);排序也只把 ≤0 排最前，并加回归测试(旧逻辑下会失败)。
+- **账户名重复**:API 在无标签时用缩写地址填 `label`,前端把它当名字又显示一遍地址。`label` 等于缩写地址时视为无标签。
+- **概览卡位置**:原放在活动表与账户风险之间，移到页面顶部(拆为 `ExplorerOverview`)。
+- **窄屏"另有 N 个空账户"被截断**:表格在容器内横向滚动，居中的按钮落在可视区外。改为靠左。
+- **验收**:`kind` 过滤三种取值与非法值 400(真实 API);浅色 1280 中文(相对时间、≈ 美元、无"成功"标签、借还筛选、清算筛选显示 10/11 的真实清算)、深色 390 英文(无溢出)。
+
+### T25 追加：显示 Solana 钱包(2026-10-27,作者要求)
+
+链上数据的"账户"原本是 marginfi 账户地址，用户认得的是自己的钱包。marginfi 每条存/借/还/取/清算事件头里自带 `marginfi_account_authority`(拥有该 marginfi 账户的钱包),不需要额外查询。
+
+- 后端:`ActivityItem` 增加 `authority`、`authority_label`(钱包在 labels 里的名字，如 bob);测试断言 bob 借款的钱包与名字。
+- 前端：新增 `WalletCell`,链上活动与账户风险两张表列名改为"钱包":第一行钱包(有名字显示名字，否则缩写地址，链到 Solana Explorer 地址页),第二行"marginfi 账户 xxxx"。账户风险用 `AccountView.authority`;"最低健康度"卡片也改显示钱包。
+- 验收：本地 API 返回的钱包与测试钱包(A4VM…c7k7)、作者钱包(J6ND…jT35)一致;中文浅色 1280、英文深色 390 无溢出;名字用正文字体，地址用等宽字体。
+### T26 修复 mock 价格可被任何人改写(安全)— done
+
+**漏洞**:tSOL/tUSDC/tHYPE 的 mock 价格账户由 mocks 程序的 `write(offset, data)` 写入，只要求目标账户签名;而价格账户密钥由公开字符串派生(`deriveKeypair('feed/<代币>')`),任何人都能算出并改价，进而用虚高抵押借空池子或把别人压到可清算。
+
+**修复(mocks 程序由 Claude 改并部署;本任务只改 TypeScript)**:
+- `write`:账户改为 `[target(可写、签名), authority(签名)]`,`authority` 必须是价格管理员(部署者钱包 `6LzQ…NL9`)。只有管理员能改价。
+- 新增 `refresh_timestamp`:无参数，账户 `[feed(可写，不签名)]`。任何人可调用，只把 `last_update_timestamp`(偏移 2216)设为链上当前时间、三个 slot 字段(偏移 2264+6×16+8 起)设为当前 slot;价格不变。仅接受本程序拥有、PullFeed 判别符、`sample_size>0` 的账户。Anchor 判别符 = `sha256("global:refresh_timestamp")[0..8]`。
+
+**要做(TypeScript,全部离线可测):**
+1. `src/oracle/mock-write.ts`:
+   - `writeIx(program, target, offset, data, authority)`:增加 `authority` 签名账户(第二个)。
+   - `refreshTimestampIx(program, feed)`:改为调用 `refresh_timestamp`,feed 可写不签名;不再需要时间参数(链上取 Clock)。
+   - 删除 `mockFeedSigner`;判断"是否我们的 mock、可代为刷新"改为：价格账户 owner 等于 mocks 程序且是 PullFeed 判别符。
+2. `src/api/builder/index.ts`:借款/取款需要刷新时只加 `refreshTimestampIx`,**不再给交易加任何价格账户签名**(删除部分签名逻辑)。构建器测试同步。
+3. `src/keeper/price.ts` 与 `scripts/price-keeper.ts`:keeper 只调 `refresh_timestamp`(一笔交易批量刷新到期的 feed),不再读价格、不再写价格、不需要 feed 签名;keeper 钱包只付手续费。`src/keeper/keeper.test.ts` 同步(保留"只刷新快到期的 feed"、批量一次、五次失败退出等行为断言)。
+4. `scenario/lib/mock-feed.ts`、`scripts/fix-hype-oracle.ts`:所有 `writeIx` 传 `ctx.admin.publicKey` 作 `authority`(管理员已是交易签名者)。`scripts/verify-pyth-bank.ts` 改用新的 `refreshTimestampIx`。
+5. 文档:`docs/decisions.md` 新增 D-029(漏洞、修法、三步不停机上线);`docs/addresses.md` 的 keeper 一行改为"只刷新时间、无改价权限";EP3/EP8 中描述"密钥公开派生、任何人可刷新"的段落改为新机制(snapshot-docs 片段随代码更新)。
+
+**测试**:`writeIx` 账户顺序与签名标记;`refreshTimestampIx` 判别符、账户、无签名;构建器刷新交易不含价格账户签名;keeper 新行为。
+
+**验收**:与 CI 相同的检查。程序构建、两次升级与线上联调由 Claude 完成。
+
+### T26 审查与上线记录(2026-10-27)
+
+- **程序(Claude)**:`program/mocks-lib.rs` 覆盖上游 mocks 的 `lib.rs`,`build.sh` 复制并替换 `PRICE_ADMIN` 与 `ENFORCE_WRITE_AUTHORITY`(`MOCKS_WRITE_AUTH=open|enforce`,默认 enforce)。管理员放在 `remaining_accounts[0]`,使中间态下旧的单账户调用仍能解析。`pubkey!` 宏需要未直接依赖的 `solana_program`,改为 base58 字符串比较。
+- **第 1 步(已完成)**:链上原程序已 dump 备份;ExtendProgram 每次至少 10240 字节(CLI 自动扩容只申请差额 3296 而失败),手动扩 10240 后部署 open 版。devnet 模拟：旧/新/冒充管理员的 write 均通过(open 预期),`refresh_timestamp` 对 tUSDC 通过、对 bank 账户报 ConstraintOwner。真实刷新一笔：只改 11 字节(2216–2386),价格区逐字节不变。
+- **审查修正**:Codex 的 `mockOracleOwner()` 运行时 `readFileSync('program/devnet.json')`,Vercel 函数不会打包该文件，线上所有需要刷新的借款/取款会 500。改为静态 import(本地 `program/out` 仍优先),并以空目录 CommonJS 加载验证。
+- **第 2 步**:合并本 PR,Vercel 部署后线上构建器改用 `refresh_timestamp`。
+- **第 3 步**:部署 enforce 版，验证旧格式与冒充管理员的 write 被拒、管理员 write 通过，并对正式站点跑端到端借还。
+- **第 2 步(已完成)**:PR #10 合并，Vercel 正式部署后对正式站点跑端到端：借款交易含两条 `refresh_timestamp`(tSOL、tUSDC)、只有用户 1 个签名。
+- **第 3 步(已完成)**:部署 enforce 版(slot 515667939)。devnet 模拟：旧格式 write 与冒充管理员的 write 均报 MissingRequiredSignature,管理员 write 通过,`refresh_timestamp` 仍公开可用;正式站点端到端存借还再次全部通过。本地 API/兑换台已切到新代码重启。链上旧程序备份在 scratchpad(`mocks-backup-onchain.so`),需要回滚时以管理员钱包重新部署。
+
+### T27 演示流动性：真实利率曲线 + 演示账户借贷 — done
+
+作者要求让资金池有利用率和利息，外部访客看到的不是一片 0。作者已定：①利率曲线改成接近真实市场;②先一次性铺好借贷(暂不做每日自动借还)。
+
+**现状**:所有 6 个银行利率参数相同：最优利用率 50%、该点借款利率 60%、满利用率 300%,固定费 4%/年(协议 3%+保险 1%),按比例费 6%。利用率 30% 时借款 APR 已 42%,不像真实市场。
+
+**Claude 已定的参数(不要改):**
+- 稳定币(tUSDC):`optimal_utilization_rate=0.8`、`plateau_interest_rate=0.07`、`max_interest_rate=1.0`。
+- 波动资产(tSOL、pSOL、pETH、pBTC、tHYPE):`optimal=0.45`、`plateau=0.08`、`max=1.5`。
+- 全部：`protocol_ir_fee=0.05`、`insurance_ir_fee=0.05`、`protocol_fixed_fee_apr=0`、`insurance_fee_fixed_apr=0`、`protocol_origination_fee` 不改。
+- 演示仓位(数量为 UI 单位):
+
+| 账户 | 存入 | 借出 |
+|---|---|---|
+| demo-lender | tHYPE 60 | — |
+| demo-borrower-1 | pBTC 0.3 | tUSDC 7000、pETH 0.4、tHYPE 9 |
+| demo-borrower-2 | pETH 4、tSOL 250 | tUSDC 4600、pBTC 0.05 |
+| demo-borrower-3 | pSOL 80、tSOL 200 | tUSDC 4000、tSOL 45、tHYPE 9 |
+| demo-borrower-4 | tUSDC 9000 | pSOL 20、tSOL 25 |
+
+  预计：tUSDC 利用率 ~57%(借 5.5%/存 2.9%),tHYPE ~30%,其余 10–19%;各借款账户已用借款额度 40–54%。
+
+**要做:**
+1. `scripts/set-rate-curve.ts`(管理员,`createContext` 风格同 `add-pyth-bank.ts`):对本池 6 个银行(地址见 `program/devnet.json` + labels/`docs/addresses.md`)发 `lending_pool_configure_bank`,`BankConfigOpt` 只设 `interest_rate_config`(`InterestRateConfigOpt` 各项按上表，origination 为 null),其余字段 null。支持 `--dry-run`(打印将写入的数值，不发交易)。幂等：链上已是目标值则跳过。
+2. `scripts/seed-demo.ts`(管理员运行):
+   - 演示钱包**随机生成**,私钥文件存 `~/.config/solana/lending-market-demo/<名字>.json`(权限 600),已存在则复用;**绝不**用公开字符串派生(否则任何人可接管仓位)。
+   - 管理员给每个钱包转 0.05 SOL(余额不足才补),对每个钱包需要的代币 `mintTo`(管理员是 6 种 mint 的 mint authority;按需创建 ATA,管理员付租金)。
+   - 存款/借款**走现有 API**(`/api/build` → 本地签名 → `/api/send`,同 `scripts/e2e-wallet.ts`),`API_URL` 参数指定(默认本地 8787),以复用构建器的 remaining accounts 与价格刷新逻辑。
+   - 幂等：按链上当前仓位补齐差额(已存/已借够了就跳过);每步打印签名。`--dry-run` 只打印计划。
+   - 把纯计算(差额、计划)放成纯函数并测试。
+3. `scripts/label-demo.ts` 或在 seed 末尾：把演示钱包与其 marginfi 账户写入 labels(钱包用 `actors` 类、marginfi 账户用 `marginfiAccounts` 类，名字如 `demo-borrower-1`),对 `DATABASE_URL` 指定的库执行(Claude 会对本地库和 Supabase 各跑一次)。复用 `src/store/labels`。
+4. 文档:`docs/decisions.md` D-030(为何改曲线、为何波动资产利用率天然偏低——借 1 美元需约 2.75 美元抵押，全市场平均利用率上限约 30%;演示账户私钥不入库);`docs/addresses.md` 增"演示账户"一节(地址在执行后由 Claude 填)。
+
+**测试**:利率参数编码(I80F48)与 dry-run 输出;seed 差额计算(已有部分仓位时只补差额);私钥路径不在仓库内。
+
+**验收**:与 CI 相同的检查。上链执行与验证由 Claude 完成。
+
+### T27 审查与执行(2026-10-27)— 通过(Claude 修了三处)
+
+- **借款顺序**:脚本原按账户逐个"先存后借",borrower-1 借 pETH 时 pETH 存款要等 borrower-2 才进池，流动性不足。改为两轮：全部存完再统一借。
+- **重跑不幂等**:①余额低于 0.05 SOL 就补，付过手续费后每次重跑都补 → 改为低于 0.01 才补;②份额换算截断(154.999999999)导致发出灰尘存/借 → 差额小于目标万分之一视为达成。第一次重跑因此多发了几笔极小交易(无实际影响),修复后第三次运行零交易。
+- **tSOL 利用率偏低**:Codex 正确发现 borrower-3 的 tSOL 存借会净额结算(只剩净存 155)。改由 borrower-1(pBTC 抵押)借 60 tSOL,tSOL 利用率 4.8% → 16.2%。
+- **执行结果(正式站点)**:利率曲线 6 笔(重跑全部 already set);演示仓位 5 账户。tUSDC 57.3%(借 5.52%/存 2.87%)、tHYPE 30.0%(5.86%/1.60%)、pSOL 19.0%、pBTC 16.3%、tSOL 16.2%、pETH 9.5%;整体利用率约 24%。演示账户健康度 43.3%–65.1%,均为"健康"。私钥文件 600、目录 700,在仓库外。

@@ -20,6 +20,7 @@
     "@switchboard-xyz/common": "5.8.5",
     "@switchboard-xyz/common-legacy": "1.1.1",
     "@switchboard-xyz/on-demand": "3.10.6",
+    "@vercel/functions": "3.9.11",
     "dotenv": "16.4.7",
     "pg": "8.23.1"
   },
@@ -28,5 +29,10 @@
     "@types/pg": "8.23.1",
     "tsx": "4.19.2",
     "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "rpc-websockets": "9.3.8"
+    }
   }
 }

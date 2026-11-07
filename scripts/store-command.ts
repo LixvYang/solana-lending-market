@@ -2,12 +2,12 @@
 import { dirname, join, resolve } from 'node:path';
 import { pgDb, type Db } from '../src/store/db';
 import { assertMigrated, migrate } from '../src/store/migrate';
-export async function runStoreCommand(action: (db: Db) => Promise<void>): Promise<void> {
+export async function runStoreCommand(action: (db: Db) => Promise<void>, migrationLock = false): Promise<void> {
   const db = pgDb();
   try {
     const directory = join(dirname(resolve(process.argv[1])), '../src/store/migrations');
     if (process.env.SERVICE) await assertMigrated(db, directory);
-    else await migrate(db, directory);
+    else await migrate(db, directory, migrationLock);
     await action(db);
   } finally { await db.close(); }
 }

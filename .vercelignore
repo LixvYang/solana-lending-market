@@ -1,0 +1,22 @@
+# 白名单：只上传构建前端与 api/main.ts 需要的文件。
+# Vercel CLI 默认会上传 .env 与本地数据库目录 pgdata/,不能靠默认忽略列表。
+/*
+!/api
+!/src
+!/scripts
+!/scenario
+!/web
+!/program
+!/package.json
+!/pnpm-lock.yaml
+!/tsconfig.json
+!/vercel.json
+!/fixtures
+/fixtures/*
+!/fixtures/m1-run.json
+/program/*
+!/program/devnet.json
+/web/node_modules
+/web/dist
+**/*.test.ts
+**/.env*

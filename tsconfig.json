@@ -10,6 +10,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["scenario", "src", "scripts"],
+  "include": ["api", "scenario", "src", "scripts"],
   "exclude": ["node_modules", "program/.upstream"]
 }

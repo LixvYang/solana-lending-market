@@ -518,3 +518,40 @@ codex 的 M7a 离线测试通过后,接上真实 devnet(Helius)、真实 Postgre
 
 **注意:** 第一次端到端在借款步失败(`PriceStale`),因为 API 进程是改代码前启动的，签名者名单里没有 tHYPE;重启 API 后通过。**改了预言机相关代码后要重启 API、兑换台与 keeper。**价格固定意味着 tHYPE 不跟市场走，清算演示仍用 tSOL 改价。
 
+## D-028 全免费托管路径：Vercel Functions + Supabase(2026-10-24)
+
+作者选择不用自有 VPS，前后端放 Vercel Hobby，Postgres 用 Supabase Free。保留现有 `SERVICE=api|faucet|keeper|ingest` 容器路径，新增根目录 Vercel 函数入口：同一个 Node 函数分发 `/api/*` 与 `/api/desk/*`，公共只读 GET 使用 5 秒 CDN 缓存；钱包请求、POST 与错误响应不缓存。前端使用同源 `/api/desk/faucet`，不设置 `VITE_API_BASE`。
+
+Vercel 不运行迁移，也不运行常驻 keeper/ingest。API 请求通过 `waitUntil` 触发 30 秒节流的 `followOnce`，数据库原子租约最长 60 秒；每日 Cron 以 `CRON_SECRET` 鉴权做一次低频同步，并避免 Supabase Free 长时间无活动暂停。mock 价继续由用户借款/取款交易刷新，Pyth 仍由推送账户提供。
+
+Supabase **Transaction pooler** 用于运行时请求；函数连接池默认 1，查询不使用命名 prepared statement 或会话级 `SET`/锁。迁移仍由维护者在本地使用 Supabase **Session pooler** URI 执行。新增 006 迁移保存同步租约与水龙头预留；水龙头容器与 Vercel 共用数据库限流，借助事务级 advisory lock 复用 T20 钱包/IP/全站滑动窗口规则。
+
+`TRUST_PROXY_HOPS` 的 Vercel 取值尚待真实请求头核验，部署文档暂标为待验证；Vercel 打包函数入口及相对导入、Supabase Transaction pooler 行为、Hobby 预览部署和全链路仍待 Claude 联调。具体步骤见 `docs/deploy.md`。
+
+## D-029 mock 价格写入必须由管理员授权(2026-10-27,TypeScript 已改;链上部署待完成)
+
+**漏洞。** `feed/tSOL`、`feed/tUSDC`、`feed/tHYPE` 的地址由公开字符串派生。旧 `mocks::write(offset, data)` 只要求目标 feed 签名,所以任何人都能重建该密钥并任意改写价格;虚高抵押价可导致池子被借空,低价可把其他账户推到清算线。
+
+**决定。** 链上 `write` 使用账户 `[target(可写、签名), authority(签名)]`;authority 必须是部署者价格管理员 `6LzQJAR4A7KRcSHYhBhXdv4pcUuzAQtAfMMhoGDZ8NL9`。新增无参数 `refresh_timestamp`,账户只有 `[feed(可写、不签名)]`:任何人可调用,但程序只接受自己拥有、PullFeed discriminator 正确且 `sample_size > 0` 的账户,并从链上 Clock 更新 `last_update_timestamp` 与三个 slot 字段,价格字节保持不变。管理员私钥留在本机 CLI;API、用户钱包和 keeper 均无改价能力。
+
+**TypeScript 改动。** `writeIx` 明确接收 authority 并按上述顺序编码;scenario 与管理员 CLI 传管理员地址(管理员已作为交易签名者)。构建器和 keeper 只调用 `refresh_timestamp`,不会把派生的 feed keypair 作为交易签名者;构建器仍检查实时 owner、PullFeed discriminator 与初始化状态。keeper 只读取布局/owner/时间戳以决定刷新哪些账户,一笔交易批量刷新,只用 keeper 钱包付费。`verify-pyth-bank` 也改用公开刷新指令。
+
+**不停机上线顺序(三步,须在 Claude 完成链上改动时执行):**
+1. 先准备并检查新 mocks 程序和兼容的 API/keeper/CLI 构建,确认三个 feed 都已初始化且时间戳新鲜;旧服务继续运行,不重建 feed、不改 bank 地址。
+2. 在 feeds 新鲜时升级 mocks 程序。升级原子生效,已有 feed 数据与价格不变;此时旧 TypeScript 服务若遇到过期 feed 会失败,所以立即进入下一步。
+3. 对 API 与 keeper 做滚动重启(不同时停服务),部署管理员 CLI 后执行一次只读/模拟验收,确认借款/取款生成 `refresh_timestamp`、keeper 交易没有 feed signer,并验证管理员改价成功、非管理员写入被拒。
+
+现有 tSOL/tUSDC 年龄上限为 240 秒,因此第 2–3 步需在这个新鲜度窗口内完成;若超过窗口,过期前端操作会暂时收到价格不可用,keeper 恢复后自动刷新,无需恢复旧的公开改价权限。该顺序是计划,本地没有执行程序构建、部署、真实钱包拒绝验证或 devnet 联调。
+
+## D-030 演示账户为前端提供可见流动性(2026-10-27)
+
+**原因。** 新访客打开借贷市场时,空池利用率与利息均为零,无法看出借贷和利率曲线如何工作。用一次性演示仓位让六个银行出现真实链上存借与计息;不做每日自动借还,避免后台自动交易和持续管理私钥。
+
+**利率曲线。** tUSDC 使用最优利用率 80%、平台借款利率 7%、满利用率 100%;其他波动资产使用 45%、8%、150%。两类费用按比例各 5%,固定 APR 费用为零。波动资产利用率天然低:抵押率约 0.36 时,借 1 美元至少需要约 2.75 美元抵押;若市场多数资产只作为抵押而不是借出,总体利用率上限约为 1/2.75 ≈ 36%,因此演示目标落在 10–30% 区间是合理的。此处是由抵押比率推算的近似上界,不是对全市场实际利用率的统计。
+
+**演示头寸。** 由 `scripts/seed-demo.ts` 一次性建立,之后可幂等补齐。演示钱包随机生成,私钥放在 `~/.config/solana/lending-market-demo/` 并设为仅所有者可读写;私钥不进入仓库。只在 devnet 使用。配置与实际地址见 `docs/addresses.md`。
+
+**协议约束。** marginfi 对同一账户、同一银行的存款与借款做净额结算,不能同时保留两种头寸。表中 demo-borrower-3 的 tSOL 存入 200、借出 45 因此按净存入 155 处理;其余借贷不受影响。这是按现有 API/协议语义处理的近似目标,执行后应核验利用率。
+
+**执行限制。** 本地尚未发送利率配置或播种交易;链上账户地址、真实利用率与 APR 待管理员执行脚本后核验。
+

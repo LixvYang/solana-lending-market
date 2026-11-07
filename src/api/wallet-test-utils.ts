@@ -10,7 +10,7 @@ import { marginfiIdl } from '../decoder/idl';
 import { encodeBase58 } from '../core/base58';
 import type { WalletRpc, WaitClock } from './wallet-rpc';
 export const addresses = run.addresses;
-export const mockOwner = new PublicKey(Buffer.alloc(32, 7));
+export const mockOwner = new PublicKey('3UNhKQCzvj4ZXRP7BBy25STrRAh8VMtBiKmXimGUWAt7');
 export function fakeClock(start = 1_700_000_000_000): WaitClock {
   let time = start;
   return { now: () => time, sleep: async ms => { time += ms; } };
